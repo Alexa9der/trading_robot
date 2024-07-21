@@ -171,3 +171,8 @@ ipython_config.py
 
 # Ignore TA-Lib installation files
 ta-lib/
+
+# Exclude Docker artifacts
+*.tar
+*.tar.gz
+*.zip
