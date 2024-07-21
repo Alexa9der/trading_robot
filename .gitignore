@@ -168,3 +168,6 @@ ipython_config.py
 
 # Remove previous ipynb_checkpoints
 #   git rm -r .ipynb_checkpoints/
+
+# Ignore TA-Lib installation files
+ta-lib/
