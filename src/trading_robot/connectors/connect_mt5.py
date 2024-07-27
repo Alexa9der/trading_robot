@@ -1,4 +1,4 @@
-import MetaTrader5 as mt5
+from docker_connector import mt5
 import pandas as pd 
 import os
 
@@ -22,14 +22,14 @@ class ConnectMT5:
     Initialize the class with account, password, and server parameters or provide the path to a JSON file containing the data.
     Call _connect_to_mt5() method to establish a connection to the MT5 server.
     """
+    
     def __init__(self, account=None, password=None, server=None):
-        
         try:
             if account and password and server:
-                self.__account = account
+                self.__account = int(account)
                 self.__password = password
                 self.__server = server
-            else :
+            else:
                 self.__account, self.__password, self.__server = self.__get_connect_data()
         except Exception as e:
             print("ConnectMT5: Error setting up data to connect to the MT5 server.")
@@ -37,19 +37,18 @@ class ConnectMT5:
     
     def __get_connect_data(self):
         """
-        Private method to extract connection data from a JSON file.
-
-        Parameters:
-        - path (str): Path to the JSON file containing connection data.
+        Private method to extract connection data from environment variables.
 
         Returns:
-        - Tuple (str, str, str): Account, password, and server extracted from the JSON file.
+        - Tuple (str, str, str): Account, password, and server extracted from environment variables.
         """
-
         account = os.getenv('MT5_ACCOUNT')
         password = os.getenv('MT5_PASSWORD')
         server = os.getenv('MT5_SERVER')
-        
+
+        if not account or not password or not server:
+            raise ValueError("Missing connection data from environment variables")
+
         return account, password, server
 
     def _connect_to_mt5(self):
@@ -64,12 +63,11 @@ class ConnectMT5:
             mt5.shutdown()
             return False
 
-        authorized = mt5.login(login=self.__account, 
-                               password=self.__password, 
-                               server=self.__server)
-    
+        authorized = mt5.login(login=int(self.__account), 
+                            password=self.__password, 
+                            server=self.__server)
+
         if authorized:
-            # print(f"Successfully connected to your account")
             return True
         else:
             print("Failed to connect. Error code:", mt5.last_error())
@@ -77,7 +75,4 @@ class ConnectMT5:
             return False
         
 
-
-if __name__ == '__main__':
-    connect = ConnectMT5()
     

@@ -1,6 +1,5 @@
 import pandas as pd
-import numpy as np
-import MetaTrader5 as mt5
+from docker_connector import mt5
 
 from trading_robot.connectors.connect_mt5 import ConnectMT5
 from trading_robot.strategies.risk_manager import RiskManager
