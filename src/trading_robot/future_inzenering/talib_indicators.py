@@ -1,7 +1,16 @@
+import sys
+import os
+
+project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from connectors.data_collector import DataCollector, mt5
+
 import talib as tl
 import pandas as pd 
 import numpy as np
-import tqdm
+
 
 class Indicators:
     """
@@ -81,10 +90,10 @@ class Indicators:
             df = self.df.copy()
         else:
             df = df.copy()
-    
-        df["CDL2CROWS"] = tl.CDL2CROWS(df["Open"], df["High"], df["Low"], df["Close"])
+        
+        df["CDL2CROWS"] = tl.CDL2CROWS(df["Open"], df["High"], df["Low"], df["Close"]) # type: ignore
         df["CDL3BLACKCROWS"] = tl.CDL3BLACKCROWS(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDL3INSIDE"] = tl.CDL3INSIDE(df["Open"], df["High"], df["Low"], df["Close"])
+        df["CDL3INSIDE"] = tl.CDL3INSIDE(df["Open"], df["High"], df["Low"], df["Close"]) # type: ignore
         df["CDL3LINESTRIKE"] = tl.CDL3LINESTRIKE(df["Open"], df["High"], df["Low"], df["Close"])
         df["CDL3OUTSIDE"] = tl.CDL3OUTSIDE(df["Open"], df["High"], df["Low"], df["Close"])
         df["CDL3STARSINSOUTH"] = tl.CDL3STARSINSOUTH(df["Open"], df["High"], df["Low"], df["Close"])
@@ -365,7 +374,7 @@ class Indicators:
 
         merged_data = df.copy() if df is not None else None
         
-        for method in tqdm(indicator_methods, desc="Adding all indicators."):
+        for method in indicator_methods:
             m = getattr(self, method)
             method_result = m(df)
             merged_data = pd.merge(merged_data, method_result, 
@@ -374,3 +383,15 @@ class Indicators:
                                    suffixes=('_orig', '_added'))
 
         return merged_data
+    
+
+
+
+
+if __name__ == "__main__":
+    indicators = Indicators()
+    data_col = DataCollector()
+    
+    data = data_col.get_historical_data(symbol="EURUSD")
+    data = indicators.indicators_pattern_recognition_functions(data)
+    print(data)

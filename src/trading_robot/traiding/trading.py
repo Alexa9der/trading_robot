@@ -2,7 +2,7 @@ import pandas as pd
 from docker_connector import mt5
 
 from trading_robot.connectors.connect_mt5 import ConnectMT5
-from trading_robot.strategies.risk_manager import RiskManager
+from traiding.risk_manager import RiskManager
 
 
 

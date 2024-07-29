@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import tqdm
 import os
 from docker_connector import mt5
 
@@ -115,11 +114,11 @@ class SMATuner(Strategy, DataCollector):
 
         """
         data = {}
-        for symbol in tqdm(symbols):
+        for symbol in symbols:
             data[symbol] = self.get_historical_data(symbol, timeframe)
 
         result = []
-        for sma in tqdm(range(min_period, max_period)):
+        for sma in range(min_period, max_period):
             for symbol in data.keys():
                 buy, sell, median_max_profit, median_min_profit = self.calculate_accumulated_price_changes(self.sma(data[symbol], slow=sma), **kwargs)
                 result.append((sma, symbol, buy, sell, median_max_profit, median_min_profit))
@@ -196,3 +195,7 @@ class SMATuner(Strategy, DataCollector):
         count_z = len(str(data.iloc[-1]['Close']).split('.')[-1]) - 1
         sl = sl * float('0.' +  f'{ "0" * count_z}' + '1')
         return sl
+    
+
+if __name__ == "__main":
+    ...
