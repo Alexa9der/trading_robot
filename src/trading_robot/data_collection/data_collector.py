@@ -60,7 +60,8 @@ class DataCollector(ConnectMT5):
             rates_frame['time'] = pd.to_datetime(rates_frame['time'], unit='s')
             rates_frame = rates_frame.rename(columns={"time": "Date", 'tick_volume': 'Volume'})
             rates_frame = rates_frame.rename(columns=lambda x: x.capitalize())
-            return rates_frame[['Date', 'Open', 'Close', 'High', 'Low', 'Volume']]
+            rates_frame = rates_frame.set_index("Date")
+            return rates_frame[['Open', 'Close', 'High', 'Low', 'Volume']]
         else:
             print("Error while receiving data.")
             return None

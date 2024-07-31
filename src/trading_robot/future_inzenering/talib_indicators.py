@@ -5,16 +5,16 @@ project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from connectors.data_collector import DataCollector, mt5
+from data_collection.data_collector import DataCollector, mt5
 
 import talib as tl
 import pandas as pd 
 import numpy as np
 
 
-class Indicators:
+class TLIndicators:
     """
-    A class to preprocess stock data by applying various technical indicators and mathematical transformations.
+    A class to preprocess stock data by applying various technical tl_indicators and mathematical transformations.
     """
     def __init__ (self, df: pd.DataFrame= None, periods: list[int] = None):
         """
@@ -75,16 +75,16 @@ class Indicators:
 
     def indicators_pattern_recognition_functions(self, df=None):
         """
-        Adds pattern recognition indicators to the dataframe.
+        Adds pattern recognition tl_indicators to the dataframe.
     
         Args:
             df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
                 If not provided, the DataFrame passed during class initialization will be used.
     
         Returns:
-            pd.DataFrame: Dataframe with added pattern recognition indicators.
+            pd.DataFrame: Dataframe with added pattern recognition tl_indicators.
     
-        This function creates copies of the input data and adds pattern recognition indicators to the dataframe.
+        This function creates copies of the input data and adds pattern recognition tl_indicators to the dataframe.
         """
         if df is None:
             df = self.df.copy()
@@ -349,14 +349,14 @@ class Indicators:
 
     def all_talib_indicators(self, df=None):
         """
-        Adds all available indicators to the input DataFrame.
+        Adds all available tl_indicators to the input DataFrame.
     
         Args:
-            df (pd.DataFrame, optional): Input DataFrame to which the indicators will be added.
+            df (pd.DataFrame, optional): Input DataFrame to which the tl_indicators will be added.
                 If not provided, the DataFrame passed during class initialization will be used.
     
         Returns:
-            pd.DataFrame: DataFrame with added indicators.
+            pd.DataFrame: DataFrame with added tl_indicators.
     
         This function iterates over all available indicator methods in the class and adds their outputs to the input DataFrame.
         """
@@ -389,9 +389,9 @@ class Indicators:
 
 
 if __name__ == "__main__":
-    indicators = Indicators()
+    tl_indicators = TLIndicators()
     data_col = DataCollector()
     
     data = data_col.get_historical_data(symbol="EURUSD")
-    data = indicators.indicators_pattern_recognition_functions(data)
+    data = tl_indicators.indicators_pattern_recognition_functions(data)
     print(data)

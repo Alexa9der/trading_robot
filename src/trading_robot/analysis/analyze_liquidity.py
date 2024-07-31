@@ -6,7 +6,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 # from connectors.docker_connector  import mt5
-from connectors.data_collector import DataCollector, mt5
+from data_collection.data_collector import DataCollector, mt5
 
 import numpy as np
 import pandas as pd

@@ -3,7 +3,7 @@ import numpy as np
 import os
 from docker_connector import mt5
 
-from trading_robot.connectors.data_collector import DataCollector
+from data_collection.data_collector import DataCollector
 from trading_robot.strategies.strategy import Strategy
 
 
