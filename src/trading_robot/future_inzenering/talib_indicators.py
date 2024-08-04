@@ -12,11 +12,13 @@ import pandas as pd
 import numpy as np
 
 
+
 class TLIndicators:
     """
     A class to preprocess stock data by applying various technical tl_indicators and mathematical transformations.
     """
-    def __init__ (self, df: pd.DataFrame= None, periods: list[int] = None):
+    def __init__ (self, data: pd.DataFrame, Open:str="Open", Close:str="Close",
+                  High:str="High", Low:str="Low", Volume:str="Volume"):
         """
         Initializes the Preprocessing_stock_data class.
 
@@ -26,142 +28,96 @@ class TLIndicators:
 
         This function initializes the Preprocessing_stock_data class and sets the dataframe, columns, and periods to be used for processing.
         """
-        if df is not None:
-            self.df = df.copy()
-        self.periods = periods if periods is None else [23,115,220]
 
-    def price_changes(self, df=None):
-        """
-        Calculate various price change characteristics for a given DataFrame.
-    
-        Args:
-            df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
-                If not provided, the DataFrame passed during class initialization will be used.
-    
-        Returns:
-            pd.DataFrame: Updated DataFrame with additional columns for price changes.
-    
-        This function calculates several price change characteristics based on the input DataFrame. The following
-        columns are added to the DataFrame:
-    
-        - 'PriceRange': The difference between the High and Low prices, representing the price range or volatility.
-        - 'MaxPositivePriceChange': The difference between the High price and the Open price, indicating the maximum
-          positive price change during the period.
-        - 'MaxNegativePriceChange': The difference between the Open price and the Low price, indicating the maximum
-          negative price change during the period.
-        - 'PriceChange': The change in closing price compared to the previous period.
-    
-        These additional columns provide insights into the volatility, maximum positive and negative price changes,
-        and overall price dynamics over time.
-        """
-        if df is None:
-            df = self.df.copy()
-        else:
-            df = df.copy()
-    
-        # Calculate the difference between High and Low prices (Volatility)
-        df['PriceRange'] = df['High'] - df['Low']
-    
-        # Calculate the difference between High and Open prices (Max Positive Price Change)
-        df['MaxPositivePriceChange'] = df['High'] - df['Open']
-    
-        # Calculate the difference between Open and Low prices (Max Negative Price Change)
-        df['MaxNegativePriceChange'] = df['Open'] - df['Low']
-    
-        # Calculate the change in closing price compared to the previous period
-        df['PriceChange'] = (df['Close'] - df['Close'].shift(1)).fillna(0)
-    
-        return df
+        self._df = data.copy()
+        self._Open = data[Open].copy()
+        self._Close = data[Close].copy()
+        self._High = data[High].copy() 
+        self._Low = data[Low].copy() 
+        self._Volume = data[Volume].copy() 
 
-    def indicators_pattern_recognition_functions(self, df=None):
+
+
+    def indicators_pattern_recognition_functions(self):
         """
         Adds pattern recognition tl_indicators to the dataframe.
-    
-        Args:
-            df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
-                If not provided, the DataFrame passed during class initialization will be used.
     
         Returns:
             pd.DataFrame: Dataframe with added pattern recognition tl_indicators.
     
         This function creates copies of the input data and adds pattern recognition tl_indicators to the dataframe.
         """
-        if df is None:
-            df = self.df.copy()
-        else:
-            df = df.copy()
         
-        df["CDL2CROWS"] = tl.CDL2CROWS(df["Open"], df["High"], df["Low"], df["Close"]) # type: ignore
-        df["CDL3BLACKCROWS"] = tl.CDL3BLACKCROWS(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDL3INSIDE"] = tl.CDL3INSIDE(df["Open"], df["High"], df["Low"], df["Close"]) # type: ignore
-        df["CDL3LINESTRIKE"] = tl.CDL3LINESTRIKE(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDL3OUTSIDE"] = tl.CDL3OUTSIDE(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDL3STARSINSOUTH"] = tl.CDL3STARSINSOUTH(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDL3WHITESOLDIERS"] = tl.CDL3WHITESOLDIERS(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLABANDONEDBABY"] = tl.CDLABANDONEDBABY(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLADVANCEBLOCK"] = tl.CDLADVANCEBLOCK(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLBELTHOLD"] = tl.CDLBELTHOLD(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLBREAKAWAY"] = tl.CDLBREAKAWAY(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLCLOSINGMARUBOZU"] = tl.CDLCLOSINGMARUBOZU(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLCONCEALBABYSWALL"] = tl.CDLCONCEALBABYSWALL(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLCOUNTERATTACK"] = tl.CDLCOUNTERATTACK(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLDARKCLOUDCOVER"] = tl.CDLDARKCLOUDCOVER(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLDOJI"] = tl.CDLDOJI(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLDOJISTAR"] = tl.CDLDOJISTAR(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLDRAGONFLYDOJI"] = tl.CDLDRAGONFLYDOJI(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLENGULFING"] = tl.CDLENGULFING(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLEVENINGDOJISTAR"] = tl.CDLEVENINGDOJISTAR(df["Open"], df["High"], df["Low"], df["Close"], penetration=0)
-        df["CDLEVENINGSTAR"] = tl.CDLEVENINGSTAR(df["Open"], df["High"], df["Low"], df["Close"], penetration=0)
-        df["CDLGAPSIDESIDEWHITE"] = tl.CDLGAPSIDESIDEWHITE(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLGRAVESTONEDOJI"] = tl.CDLGRAVESTONEDOJI(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHAMMER"] = tl.CDLHAMMER(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHANGINGMAN"] = tl.CDLHANGINGMAN(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHARAMI"] = tl.CDLHARAMI(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHARAMICROSS"] = tl.CDLHARAMICROSS(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHIGHWAVE"] = tl.CDLHIGHWAVE(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHIKKAKE"] = tl.CDLHIKKAKE(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHIKKAKEMOD"] = tl.CDLHIKKAKEMOD(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLHOMINGPIGEON"] = tl.CDLHOMINGPIGEON(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLIDENTICAL3CROWS"] = tl.CDLIDENTICAL3CROWS(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLINNECK"] = tl.CDLINNECK(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLINVERTEDHAMMER"] = tl.CDLINVERTEDHAMMER(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLKICKING"] = tl.CDLKICKING(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLKICKINGBYLENGTH"] = tl.CDLKICKINGBYLENGTH(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLLADDERBOTTOM"] = tl.CDLLADDERBOTTOM(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLLONGLEGGEDDOJI"] = tl.CDLLONGLEGGEDDOJI(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLLONGLINE"] = tl.CDLLONGLINE(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLMARUBOZU"] = tl.CDLMARUBOZU(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLMATCHINGLOW"] = tl.CDLMATCHINGLOW(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLMATHOLD"] = tl.CDLMATHOLD(df["Open"], df["High"], df["Low"], df["Close"], penetration=0)
-        df["CDLMORNINGDOJISTAR"] = tl.CDLMORNINGDOJISTAR(df["Open"], df["High"], df["Low"], df["Close"], penetration=0)
-        df["CDLMORNINGSTAR"] = tl.CDLMORNINGSTAR(df["Open"], df["High"], df["Low"], df["Close"], penetration=0)
-        df["CDLONNECK"] = tl.CDLONNECK(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLPIERCING"] = tl.CDLPIERCING(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLRICKSHAWMAN"] = tl.CDLRICKSHAWMAN(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLRISEFALL3METHODS"] = tl.CDLRISEFALL3METHODS(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLSEPARATINGLINES"] = tl.CDLSEPARATINGLINES(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLSHOOTINGSTAR"] = tl.CDLSHOOTINGSTAR(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLSHORTLINE"] = tl.CDLSHORTLINE(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLSPINNINGTOP"] = tl.CDLSPINNINGTOP(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLSTALLEDPATTERN"] = tl.CDLSTALLEDPATTERN(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLSTICKSANDWICH"] = tl.CDLSTICKSANDWICH(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLTAKURI"] = tl.CDLTAKURI(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLTASUKIGAP"] = tl.CDLTASUKIGAP(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLTHRUSTING"] = tl.CDLTHRUSTING(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLTRISTAR"] = tl.CDLTRISTAR(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLUNIQUE3RIVER"] = tl.CDLUNIQUE3RIVER(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLUPSIDEGAP2CROWS"] = tl.CDLUPSIDEGAP2CROWS(df["Open"], df["High"], df["Low"], df["Close"])
-        df["CDLXSIDEGAP3METHODS"] = tl.CDLXSIDEGAP3METHODS(df["Open"], df["High"], df["Low"], df["Close"])
+        
+        self._df["CDL2CROWS"] = tl.CDL2CROWS(self._Open, self._High, self._Low, self._Close) # type: ignore
+        self._df["CDL3BLACKCROWS"] = tl.CDL3BLACKCROWS(self._Open, self._High, self._Low, self._Close)
+        self._df["CDL3INSIDE"] = tl.CDL3INSIDE(self._Open, self._High, self._Low, self._Close) # type: ignore
+        self._df["CDL3LINESTRIKE"] = tl.CDL3LINESTRIKE(self._Open, self._High, self._Low, self._Close)
+        self._df["CDL3OUTSIDE"] = tl.CDL3OUTSIDE(self._Open, self._High, self._Low, self._Close)
+        self._df["CDL3STARSINSOUTH"] = tl.CDL3STARSINSOUTH(self._Open, self._High, self._Low, self._Close)
+        self._df["CDL3WHITESOLDIERS"] = tl.CDL3WHITESOLDIERS(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLABANDONEDBABY"] = tl.CDLABANDONEDBABY(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLADVANCEBLOCK"] = tl.CDLADVANCEBLOCK(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLBELTHOLD"] = tl.CDLBELTHOLD(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLBREAKAWAY"] = tl.CDLBREAKAWAY(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLCLOSINGMARUBOZU"] = tl.CDLCLOSINGMARUBOZU(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLCONCEALBABYSWALL"] = tl.CDLCONCEALBABYSWALL(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLCOUNTERATTACK"] = tl.CDLCOUNTERATTACK(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLDARKCLOUDCOVER"] = tl.CDLDARKCLOUDCOVER(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLDOJI"] = tl.CDLDOJI(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLDOJISTAR"] = tl.CDLDOJISTAR(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLDRAGONFLYDOJI"] = tl.CDLDRAGONFLYDOJI(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLENGULFING"] = tl.CDLENGULFING(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLEVENINGDOJISTAR"] = tl.CDLEVENINGDOJISTAR(self._Open, self._High, self._Low, self._Close, penetration=0)
+        self._df["CDLEVENINGSTAR"] = tl.CDLEVENINGSTAR(self._Open, self._High, self._Low, self._Close, penetration=0)
+        self._df["CDLGAPSIDESIDEWHITE"] = tl.CDLGAPSIDESIDEWHITE(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLGRAVESTONEDOJI"] = tl.CDLGRAVESTONEDOJI(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHAMMER"] = tl.CDLHAMMER(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHANGINGMAN"] = tl.CDLHANGINGMAN(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHARAMI"] = tl.CDLHARAMI(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHARAMICROSS"] = tl.CDLHARAMICROSS(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHIGHWAVE"] = tl.CDLHIGHWAVE(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHIKKAKE"] = tl.CDLHIKKAKE(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHIKKAKEMOD"] = tl.CDLHIKKAKEMOD(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLHOMINGPIGEON"] = tl.CDLHOMINGPIGEON(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLIDENTICAL3CROWS"] = tl.CDLIDENTICAL3CROWS(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLINNECK"] = tl.CDLINNECK(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLINVERTEDHAMMER"] = tl.CDLINVERTEDHAMMER(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLKICKING"] = tl.CDLKICKING(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLKICKINGBYLENGTH"] = tl.CDLKICKINGBYLENGTH(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLLADDERBOTTOM"] = tl.CDLLADDERBOTTOM(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLLONGLEGGEDDOJI"] = tl.CDLLONGLEGGEDDOJI(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLLONGLINE"] = tl.CDLLONGLINE(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLMARUBOZU"] = tl.CDLMARUBOZU(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLMATCHINGLOW"] = tl.CDLMATCHINGLOW(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLMATHOLD"] = tl.CDLMATHOLD(self._Open, self._High, self._Low, self._Close, penetration=0)
+        self._df["CDLMORNINGDOJISTAR"] = tl.CDLMORNINGDOJISTAR(self._Open, self._High, self._Low, self._Close, penetration=0)
+        self._df["CDLMORNINGSTAR"] = tl.CDLMORNINGSTAR(self._Open, self._High, self._Low, self._Close, penetration=0)
+        self._df["CDLONNECK"] = tl.CDLONNECK(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLPIERCING"] = tl.CDLPIERCING(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLRICKSHAWMAN"] = tl.CDLRICKSHAWMAN(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLRISEFALL3METHODS"] = tl.CDLRISEFALL3METHODS(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLSEPARATINGLINES"] = tl.CDLSEPARATINGLINES(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLSHOOTINGSTAR"] = tl.CDLSHOOTINGSTAR(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLSHORTLINE"] = tl.CDLSHORTLINE(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLSPINNINGTOP"] = tl.CDLSPINNINGTOP(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLSTALLEDPATTERN"] = tl.CDLSTALLEDPATTERN(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLSTICKSANDWICH"] = tl.CDLSTICKSANDWICH(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLTAKURI"] = tl.CDLTAKURI(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLTASUKIGAP"] = tl.CDLTASUKIGAP(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLTHRUSTING"] = tl.CDLTHRUSTING(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLTRISTAR"] = tl.CDLTRISTAR(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLUNIQUE3RIVER"] = tl.CDLUNIQUE3RIVER(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLUPSIDEGAP2CROWS"] = tl.CDLUPSIDEGAP2CROWS(self._Open, self._High, self._Low, self._Close)
+        self._df["CDLXSIDEGAP3METHODS"] = tl.CDLXSIDEGAP3METHODS(self._Open, self._High, self._Low, self._Close)
 
-        return df.fillna(0)
+        return self._df.fillna(0)
 
-    def calculate_overlap_studies(self, df=None, periods=[23,115,220]):
+    def calculate_overlap_studies(self, periods=[23,115,220]):
         """
         Calculates various overlap studies for the input data.
     
         Args:
-            df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
-                If not provided, the DataFrame passed during class initialization will be used.
             periods (list[int], optional): List of periods for overlap studies calculations.
                 If not provided, the periods specified during class initialization will be used.
     
@@ -170,117 +126,103 @@ class TLIndicators:
     
         This function calculates various overlap studies based on the provided periods.
         """
-        if df is None:
-            df = self.df.copy()
-        else:
-            df = df.copy()
-        if periods is None:
-            periods = self.periods
-        
+        new_data = {}
         for i in periods:
-            df["DEMA"+str(i)] = tl.DEMA(df["Close"], timeperiod=i)
-            df["EMA"+str(i)] = tl.EMA(df["Close"], timeperiod=i)
-            df["KAMA"+str(i)] = tl.KAMA(df["Close"], timeperiod=i)
-            df["MIDPOINT"+str(i)] = tl.MIDPOINT(df["Close"], timeperiod=i)
-            df["SMA"+str(i)] = tl.SMA(df["Close"], timeperiod=i)
-            df["TRIMA"+str(i)] = tl.TRIMA(df["Close"], timeperiod=i)
-            df["WMA"+str(i)] = tl.WMA(df["Close"], timeperiod=i)
-            df["T3"+str(i)] = tl.T3(df["Close"], timeperiod=i, vfactor=0)
-            df["TEMA"+str(i)] = tl.TEMA(df["Close"], timeperiod=i)
-            df["MA"+str(i)] = tl.MA(df["Close"], timeperiod=i, matype=0)
-            df["HT_TRENDLINE"+str(i)] = tl.HT_TRENDLINE(df["Close"])
-        
-        return df.fillna(0)
+            new_data["DEMA"+str(i)] = tl.DEMA(self._Close, timeperiod=i)
+            new_data["EMA"+str(i)] = tl.EMA(self._Close, timeperiod=i)
+            new_data["KAMA"+str(i)] = tl.KAMA(self._Close, timeperiod=i)
+            new_data["MIDPOINT"+str(i)] = tl.MIDPOINT(self._Close, timeperiod=i)
+            new_data["SMA"+str(i)] = tl.SMA(self._Close, timeperiod=i)
+            new_data["TRIMA"+str(i)] = tl.TRIMA(self._Close, timeperiod=i)
+            new_data["WMA"+str(i)] = tl.WMA(self._Close, timeperiod=i)
+            new_data["T3"+str(i)] = tl.T3(self._Close, timeperiod=i, vfactor=0)
+            new_data["TEMA"+str(i)] = tl.TEMA(self._Close, timeperiod=i)
+            new_data["MA"+str(i)] = tl.MA(self._Close, timeperiod=i, matype=0)
+            new_data["HT_TRENDLINE"+str(i)] = tl.HT_TRENDLINE(self._Close)
 
-    def math_transform_functions(self, df=None):
+        new_data_df = pd.DataFrame(new_data, index=self._df.index)
+        self._df = pd.concat([self._df, new_data_df], axis=1)
+
+        return self._df.fillna(0)
+
+    def math_transform_functions(self):
         """
         Applies various mathematical transformation functions to the input data.
-    
-        Args:
-            df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
-                If not provided, the DataFrame passed during class initialization will be used.
     
         Returns:
             pd.DataFrame: DataFrame with applied mathematical transformation functions.
     
         This function applies various mathematical transformation functions to the 'close' column.
         """
-        if df is None:
-            df = self.df.copy()
-        else:
-            df = df.copy()
-    
-        with np.errstate(invalid='ignore'):
-            df["ACOS"] = np.where(np.abs(df["Close"]) > 1, np.nan, np.arccos(df["Close"]))
-            df["ASIN"] = np.where(np.abs(df["Close"]) > 1, np.nan, np.arcsin(df["Close"]))
-    
-        df["ATAN"] = np.arctan(df["Close"])
-        df["CEIL"] = np.ceil(df["Close"])
-        df["COS"] = np.cos(df["Close"])
-        df["FLOOR"] = np.floor(df["Close"])
-        df["LN"] = np.log(df["Close"])
-        df["LOG10"] = np.log10(df["Close"])
-        df["SIN"] = np.sin(df["Close"])
-        df["SQRT"] = np.sqrt(df["Close"])
-        df["TAN"] = np.tan(df["Close"])
-        df["TANH"] = np.tanh(df["Close"])
-    
-        return df.fillna(0)
 
-    def momentum_indicator_functions(self, df=None, periods=[23,115,220]):
+        with np.errstate(invalid='ignore'):
+            self._df["ACOS"] = np.where(np.abs(self._Close) > 1, np.nan, np.arccos(self._Close))
+            self._df["ASIN"] = np.where(np.abs(self._Close) > 1, np.nan, np.arcsin(self._Close))
+    
+        self._df["ATAN"] = np.arctan(self._Close)
+        self._df["CEIL"] = np.ceil(self._Close)
+        self._df["COS"] = np.cos(self._Close)
+        self._df["FLOOR"] = np.floor(self._Close)
+        self._df["LN"] = np.log(self._Close)
+        self._df["LOG10"] = np.log10(self._Close)
+        self._df["SIN"] = np.sin(self._Close)
+        self._df["SQRT"] = np.sqrt(self._Close)
+        self._df["TAN"] = np.tan(self._Close)
+        self._df["TANH"] = np.tanh(self._Close)
+    
+        return self._df.fillna(0)
+
+    def momentum_indicator_functions(self, periods=[23,115,220]):
         """
         Applies various momentum indicator functions to the input data.
     
         Args:
-            df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
-                If not provided, the DataFrame passed during class initialization will be used.
+            periods (list[int], optional): List of periods for overlap studies calculations.
+                If not provided, the periods specified during class initialization will be used.
     
         Returns:
             pd.DataFrame: DataFrame with applied momentum indicator functions.
     
         This function applies various momentum indicator functions to the columns such as 'open', 'high', 'low', 'close', and 'real_volume'.
         """
-        if df is None:
-            df = self.df.copy()
-        else:
-            df = df.copy()
-        if periods is None:
-            periods = self.periods
+
+        new_data = {}
         
         for i in periods:
-            df["ADX" + str(i)] = tl.ADX(df["High"], df["Low"], df["Close"], timeperiod=i)
-            df["ADXR" + str(i)] = tl.ADXR(df["High"], df["Low"], df["Close"], timeperiod=i)
-            df["AROONOSC" + str(i)] = tl.AROONOSC(df["High"], df["Low"], timeperiod=i)
-            df["CCI" + str(i)] = tl.CCI(df["High"], df["Low"], df["Close"], timeperiod=i)
-            df["CMO" + str(i)] = tl.CMO(df["Close"], timeperiod=i)
-            df["DX" + str(i)] = tl.DX(df["High"], df["Low"], df["Close"], timeperiod=i)
-            df["MFI" + str(i)] = tl.MFI(df["High"], df["Low"], df["Close"], df["Volume"], timeperiod=i)
-            df["MINUS_DI" + str(i)] = tl.MINUS_DI(df["High"], df["Low"], df["Close"], timeperiod=i)
-            df["MINUS_DM" + str(i)] = tl.MINUS_DM(df["High"], df["Low"], timeperiod=i)
-            df["MOM" + str(i)] = tl.MOM(df["Close"], timeperiod=i)
-            df["PLUS_DI" + str(i)] = tl.PLUS_DI(df["High"], df["Low"], df["Close"], timeperiod=i)
-            df["PLUS_DM" + str(i)] = tl.PLUS_DM(df["High"], df["Low"], timeperiod=i)
-            df["ROC" + str(i)] = tl.ROC(df["Close"], timeperiod=i)
-            df["ROCP" + str(i)] = tl.ROCP(df["Close"], timeperiod=i)
-            df["ROCR" + str(i)] = tl.ROCR(df["Close"], timeperiod=i)
-            df["ROCR100" + str(i)] = tl.ROCR100(df["Close"], timeperiod=i)
-            df["RSI" + str(i)] = tl.RSI(df["Close"], timeperiod=i)
-            df["WILLR" + str(i)] = tl.WILLR(df["High"], df["Low"], df["Close"], timeperiod=i)
-            df["TRIX" + str(i)] = tl.TRIX(df["Close"], timeperiod=i)
+            new_data["ADX" + str(i)] = tl.ADX(self._High, self._Low, self._Close, timeperiod=i)
+            new_data["ADXR" + str(i)] = tl.ADXR(self._High, self._Low, self._Close, timeperiod=i)
+            new_data["AROONOSC" + str(i)] = tl.AROONOSC(self._High, self._Low, timeperiod=i)
+            new_data["CCI" + str(i)] = tl.CCI(self._High, self._Low, self._Close, timeperiod=i)
+            new_data["CMO" + str(i)] = tl.CMO(self._Close, timeperiod=i)
+            new_data["DX" + str(i)] = tl.DX(self._High, self._Low, self._Close, timeperiod=i)
+            new_data["MFI" + str(i)] = tl.MFI(self._High, self._Low, self._Close, self._df["Volume"], timeperiod=i)
+            new_data["MINUS_DI" + str(i)] = tl.MINUS_DI(self._High, self._Low, self._Close, timeperiod=i)
+            new_data["MINUS_DM" + str(i)] = tl.MINUS_DM(self._High, self._Low, timeperiod=i)
+            new_data["MOM" + str(i)] = tl.MOM(self._Close, timeperiod=i)
+            new_data["PLUS_DI" + str(i)] = tl.PLUS_DI(self._High, self._Low, self._Close, timeperiod=i)
+            new_data["PLUS_DM" + str(i)] = tl.PLUS_DM(self._High, self._Low, timeperiod=i)
+            new_data["ROC" + str(i)] = tl.ROC(self._Close, timeperiod=i)
+            new_data["ROCP" + str(i)] = tl.ROCP(self._Close, timeperiod=i)
+            new_data["ROCR" + str(i)] = tl.ROCR(self._Close, timeperiod=i)
+            new_data["ROCR100" + str(i)] = tl.ROCR100(self._Close, timeperiod=i)
+            new_data["RSI" + str(i)] = tl.RSI(self._Close, timeperiod=i)
+            new_data["WILLR" + str(i)] = tl.WILLR(self._High, self._Low, self._Close, timeperiod=i)
+            new_data["TRIX" + str(i)] = tl.TRIX(self._Close, timeperiod=i)
     
-        df["APO"] = tl.APO(df["Close"], fastperiod=12, slowperiod=26, matype=0)
-        df["PPO"] = tl.PPO(df["Close"], fastperiod=12, slowperiod=26, matype=0)
-        df["real"] = tl.ULTOSC(df["High"], df["Low"], df["Close"], timeperiod1=7, timeperiod2=14, timeperiod3=28)
-    
-        return df.fillna(0)
+        new_data_df = pd.DataFrame(new_data, index=self._df.index)
+        self._df = pd.concat([self._df, new_data_df], axis=1)
 
-    def statistic_functions(self, df=None, periods=[23,115,220]):
+        self._df["APO"] = tl.APO(self._Close, fastperiod=12, slowperiod=26, matype=0)
+        self._df["PPO"] = tl.PPO(self._Close, fastperiod=12, slowperiod=26, matype=0)
+        self._df["real"] = tl.ULTOSC(self._High, self._Low, self._Close, timeperiod1=7, timeperiod2=14, timeperiod3=28)
+    
+        return self._df.fillna(0)
+
+    def statistic_functions(self, periods=[23,115,220]):
         """
         Applies various statistical functions to the input data.
     
         Args:
-            df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
-                If not provided, the DataFrame passed during class initialization will be used.
             periods (list of int, optional): List of periods for calculations. 
                 If not provided, the periods set during class initialization will be used.
     
@@ -289,36 +231,38 @@ class TLIndicators:
     
         This function applies various statistical functions to the columns such as 'high', 'low', and 'close'.
         """
-        if df is None:
-            df = self.df.copy()
-        else:
-            df = df.copy()
-        if periods is None:
-            periods = self.periods
-        
-        for i in periods:
-            df["BETA" + str(i)] = tl.BETA(df["High"], df["Low"], timeperiod=i)
-            df["CORREL" + str(i)] = tl.CORREL(df["High"], df["Low"], timeperiod=i)
-            df["LINEARREG" + str(i)] = tl.LINEARREG(df["Close"], timeperiod=i)
-            df["LINEARREG_ANGLE" + str(i)] = tl.LINEARREG_ANGLE(df["Close"], timeperiod=i)
-            df["LINEARREG_INTERCEPT" + str(i)] = tl.LINEARREG_INTERCEPT(df["Close"], timeperiod=i)
-            df["LINEARREG_SLOPE" + str(i)] = tl.LINEARREG_SLOPE(df["Close"], timeperiod=i)
-            df["STDDEV" + str(i)] = tl.STDDEV(df["Close"], timeperiod=i, nbdev=1)
-            df["TSF" + str(i)] = tl.TSF(df["Close"], timeperiod=i)
-            df["VAR" + str(i)] = tl.VAR(df["Close"], timeperiod=i, nbdev=1)
-            df["median" + str(i)] = df["Close"].rolling(window=i, min_periods=1).median()
-            df["mode" + str(i)] = df["Close"].rolling(window=i, min_periods=1).apply(lambda x: x.mode()[0])
-            df["std" + str(i)] = df["median" + str(i)].rolling(window=i, min_periods=1).std()
-    
-        return df.fillna(0)
+        new_data = {}
 
-    def math_operator_functions(self, df=None, periods=[23,115,220]):
+        for i in periods:
+            new_data[f"BETA{i}"] = tl.BETA(self._High, self._Low, timeperiod=i)
+            new_data[f"CORREL{i}"] = tl.CORREL(self._High, self._Low, timeperiod=i)
+            new_data[f"LINEARREG{i}"] = tl.LINEARREG(self._Close, timeperiod=i)
+            new_data[f"LINEARREG_ANGLE{i}"] = tl.LINEARREG_ANGLE(self._Close, timeperiod=i)
+            new_data[f"LINEARREG_INTERCEPT{i}"] = tl.LINEARREG_INTERCEPT(self._Close, timeperiod=i)
+            new_data[f"LINEARREG_SLOPE{i}"] = tl.LINEARREG_SLOPE(self._Close, timeperiod=i)
+            new_data[f"STDDEV{i}"] = tl.STDDEV(self._Close, timeperiod=i, nbdev=1)
+            new_data[f"TSF{i}"] = tl.TSF(self._Close, timeperiod=i)
+            new_data[f"VAR{i}"] = tl.VAR(self._Close, timeperiod=i, nbdev=1)
+
+        new_data_df = pd.DataFrame(new_data, index=self._df.index)
+        self._df = pd.concat([self._df, new_data_df], axis=1)
+
+        for i in periods:
+            self._df[f"median{i}"] = self._Close.rolling(window=i, min_periods=1).median()
+            self._df[f"mode{i}"] = self._Close.rolling(window=i, min_periods=1).apply(lambda x: x.mode()[0] if not x.mode().empty else np.nan)
+            self._df[f"std{i}"] = self._df[f"median{i}"].rolling(window=i, min_periods=1).std()
+    
+
+        self._df = self._df.fillna(0)
+
+        return self._df
+    
+
+    def math_operator_functions(self, periods=[23,115,220]):
         """
         Applies various mathematical operator functions to the input data.
     
         Args:
-            df (pd.DataFrame, optional): Input DataFrame containing price-related columns.
-                If not provided, the DataFrame passed during class initialization will be used.
             periods (list of int, optional): List of periods for calculations. 
                 If not provided, the periods set during class initialization will be used.
     
@@ -327,71 +271,50 @@ class TLIndicators:
     
         This function applies various mathematical operator functions to the columns such as 'high', 'low', and 'close'.
         """
-        if df is None:
-            df = self.df.copy()
-        else:
-            df = df.copy()
-        if periods is None:
-            periods = self.periods
-            
+        new_data = {}
+        
         for i in periods:
-            df["MAX"+str(i)] = tl.MAX(df["Close"], timeperiod=i)
-            df["MAXINDEX"+str(i)] = tl.MAXINDEX(df["Close"], timeperiod=i)
-            df["MIN"+str(i)] = tl.MIN(df["Close"], timeperiod=i)
-            df["MININDEX"+str(i)] = tl.MININDEX(df["Close"], timeperiod=i)
-            df["SUM"+str(i)] = tl.SUM(df["Close"], timeperiod=i)
+            new_data["MAX"+str(i)] = tl.MAX(self._Close, timeperiod=i)
+            new_data["MAXINDEX"+str(i)] = tl.MAXINDEX(self._Close, timeperiod=i)
+            new_data["MIN"+str(i)] = tl.MIN(self._Close, timeperiod=i)
+            new_data["MININDEX"+str(i)] = tl.MININDEX(self._Close, timeperiod=i)
+            new_data["SUM"+str(i)] = tl.SUM(self._Close, timeperiod=i)
     
-        df["ADD"] = df["High"] + df["Low"]
-        df["DIV"] = df["High"] / df["Low"]
-        df["SUB"] = df["High"] - df["Low"]
-    
-        return df.fillna(0)
+        new_data_df = pd.DataFrame(new_data, index=self._df.index)
+        self._df = pd.concat([self._df, new_data_df], axis=1)
 
-    def all_talib_indicators(self, df=None):
+        self._df["ADD"] = self._High + self._Low
+        self._df["DIV"] = self._High / self._Low
+        self._df["SUB"] = self._High - self._Low
+    
+        return self._df.fillna(0)
+
+    def all_talib_indicators(self ):
         """
         Adds all available tl_indicators to the input DataFrame.
-    
-        Args:
-            df (pd.DataFrame, optional): Input DataFrame to which the tl_indicators will be added.
-                If not provided, the DataFrame passed during class initialization will be used.
     
         Returns:
             pd.DataFrame: DataFrame with added tl_indicators.
     
         This function iterates over all available indicator methods in the class and adds their outputs to the input DataFrame.
         """
-        try:
-            if df is None:
-                df = self.df.copy()
-        except AttributeError as e:
-            print(f"Exept: {e}\nThe user allegedly did not submit data for processing")
-            return None
     
-        indicator_methods = ['price_changes','indicators_pattern_recognition_functions',
-                             'calculate_overlap_studies','math_transform_functions',
-                             'momentum_indicator_functions','statistic_functions',
-                             'math_operator_functions']
+        class_methods = [ methods for methods in dir(self) if not methods.startswith("_") and "all_talib_indicators" not in methods]
 
-        merged_data = df.copy() if df is not None else None
-        
-        for method in indicator_methods:
+        for method in class_methods:
             m = getattr(self, method)
-            method_result = m(df)
-            merged_data = pd.merge(merged_data, method_result, 
-                                   on=df.columns.to_list(),
-                                   how='inner',
-                                   suffixes=('_orig', '_added'))
-
-        return merged_data
+            m()
+            
+        return self._df
     
 
 
 
 
 if __name__ == "__main__":
-    tl_indicators = TLIndicators()
     data_col = DataCollector()
-    
     data = data_col.get_historical_data(symbol="EURUSD")
-    data = tl_indicators.indicators_pattern_recognition_functions(data)
+
+    tl_indicators = TLIndicators(data)
+    data = tl_indicators.all_talib_indicators()
     print(data)
