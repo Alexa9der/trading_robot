@@ -200,4 +200,5 @@ airflow/airflow.db
 airflow/.env
 airflow/.secrets/
 
-
+# Ignore the folder with MLflow artifacts
+mlruns/
