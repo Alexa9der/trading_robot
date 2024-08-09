@@ -182,3 +182,22 @@ conf/local
 *.tar
 *.tar.gz
 *.zip
+
+
+# Airflow logs
+airflow/logs/
+*.log
+
+# Airflow database
+airflow/airflow.db
+
+# PID files and temporary files
+*.pid
+*.sock
+*.tmp
+
+# Configuration that should not be changed
+airflow/.env
+airflow/.secrets/
+
+
