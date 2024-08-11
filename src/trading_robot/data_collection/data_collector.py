@@ -1,13 +1,6 @@
-import sys 
-import os 
-
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-    
 import pandas as pd
-from connectors.docker_connector import mt5
-from connectors.connect_mt5 import ConnectMT5
+from trading_robot.connectors.docker_connector import mt5
+from trading_robot.connectors.connect_mt5 import ConnectMT5
 
 
 

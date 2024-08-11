@@ -1,0 +1,21 @@
+
+raw_data:
+  type: MemoryDataset
+
+features:
+  type: MemoryDataset
+
+selected_features:
+  type: MemoryDataset
+
+X_train:
+  type: MemoryDataset
+
+y_train:
+  type: MemoryDataset
+
+X_test:
+  type: MemoryDataset
+
+y_test:
+  type: MemoryDataset

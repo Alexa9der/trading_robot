@@ -1,13 +1,7 @@
-import sys
-import os
 import pandas as pd
 import numpy as np
 
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from data_collection.data_collector import DataCollector
+from trading_robot.data_collection.data_collector import DataCollector
 
 class TimeSeriesSplits:
     """

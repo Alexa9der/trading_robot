@@ -1,11 +1,4 @@
-import sys
-import os
-
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from data_collection.data_collector import DataCollector, mt5
+from trading_robot.data_collection.data_collector import DataCollector, mt5
 
 import talib as tl
 import pandas as pd 
@@ -17,8 +10,8 @@ class TLIndicators:
     """
     A class to preprocess stock data by applying various technical tl_indicators and mathematical transformations.
     """
-    def __init__ (self, data: pd.DataFrame, Open:str="Open", Close:str="Close",
-                  High:str="High", Low:str="Low", Volume:str="Volume"):
+    def __init__ (self, data: pd.DataFrame, Open:str="FLOpen", Close:str="FLClose",
+                  High:str="FLHigh", Low:str="FLLow", Volume:str="FLVolume"):
         """
         Initializes the Preprocessing_stock_data class.
 

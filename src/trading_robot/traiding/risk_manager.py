@@ -1,9 +1,18 @@
 import pandas as pd
 import numpy as np
-from docker_connector import mt5
 
-from trading_robot.connectors.connect_mt5 import ConnectMT5
-from data_collection.data_collector import DataCollector 
+import sys
+import os
+
+project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from connectors.docker_connector import mt5
+from data_collection.data_collector import DataCollector
+from strategies.strategy import Strategy
+
+from connectors.connect_mt5 import ConnectMT5
 
 
 

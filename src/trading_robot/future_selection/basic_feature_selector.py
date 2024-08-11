@@ -1,21 +1,12 @@
-import sys
-import os
 import pandas as pd 
 import numpy as np
 from scipy.stats import spearmanr
 from sklearn.feature_selection import mutual_info_regression
 
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from data_collection.data_collector import DataCollector, mt5
-from future_inzenering.talib_indicators import TLIndicators
-from future_inzenering.basic_future_inz import BasicFuture
+from trading_robot.data_collection.data_collector import DataCollector, mt5
+from trading_robot.future_inzenering.talib_indicators import TLIndicators
+from trading_robot.future_inzenering.basic_future_inz import BasicFuture
 
 
 

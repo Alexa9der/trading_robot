@@ -1,12 +1,6 @@
-import sys 
+from trading_robot.connectors.docker_connector import mt5
+import pandas as pd
 import os 
-
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..' )) 
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from connectors.docker_connector import mt5
-import pandas as pd 
 
 
 class ConnectMT5:

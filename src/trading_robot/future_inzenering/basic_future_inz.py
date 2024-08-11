@@ -1,11 +1,4 @@
-import sys
-import os
-
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from data_collection.data_collector import DataCollector, mt5
+from trading_robot.data_collection.data_collector import DataCollector, mt5
 
 import pandas as pd 
 import numpy as np
@@ -333,5 +326,5 @@ if __name__ == "__main__":
 
     data = data_col.get_historical_data(symbol="EURUSD", timeframe= mt5.TIMEFRAME_M5 )  
     data = bf.all_indicators(data)
-
+    print(data)
     
