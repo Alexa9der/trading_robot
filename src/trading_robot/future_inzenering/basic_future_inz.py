@@ -1,8 +1,8 @@
-from trading_robot.data_collection.data_collector import DataCollector, mt5
-
 import pandas as pd 
 import numpy as np
 
+from trading_robot.data_collection.data_collector import DataCollector, mt5
+from trading_robot.utils.logger import log_message
 
 
 class HoltWinters:
@@ -163,15 +163,13 @@ class HoltWinters:
         # Merge original data with results
         return pd.merge(data, df, how='inner', left_index=True, right_index=True)
 
-
 class BasicFuture(HoltWinters):
-
 
     def __init__(self) -> None:
         super().__init__()
 
-    def create_lag_features(self, data:pd.DataFrame, start:int=1, end:int|None=None, 
-                            column:str="Close")-> pd.DataFrame:
+    def create_lag_features(self, data: pd.DataFrame, start: int = 1, end: int | None = None, 
+                            column: str = "Close") -> pd.DataFrame:
         """
         Creates lagged features for the specified column of the time series.
 
@@ -184,6 +182,7 @@ class BasicFuture(HoltWinters):
         Returns:
         pd.DataFrame: The DataFrame with the lagged features added.
         """
+        log_message(f"Creating lag features for column '{column}' with lags from {start} to {end if end else 'auto'}.")
 
         df = data.copy()
 
@@ -191,14 +190,16 @@ class BasicFuture(HoltWinters):
             n = len(data)
             end = int((n / np.sqrt(n)) / 2)
 
-        for lag in range(start, end+1 ):
+        for lag in range(start, end + 1):
             df[f'lag_{lag}'] = df[column].shift(lag)
 
-        df = df.rename(columns={"lag_1":f"FL{column}"})
+        df = df.rename(columns={"lag_1": f"FL{column}"})
+
+        log_message(f"Lag features created with {end - start + 1} lags.")
 
         return df.dropna()
 
-    def exponential_smoothing(self, data: pd.DataFrame, alpha: float=.9, column: str = "FLClose") -> pd.DataFrame: 
+    def exponential_smoothing(self, data: pd.DataFrame, alpha: float = .9, column: str = "FLClose") -> pd.DataFrame:
         """
         Performs exponential smoothing on a time series.
 
@@ -208,15 +209,18 @@ class BasicFuture(HoltWinters):
         column (str): The name of the column to smooth (defaults to "Close").
 
         Returns:
-        pd.DataFrame: A DataFrame with a column of smoothed values ​​added.
+        pd.DataFrame: A DataFrame with a column of smoothed values added.
         """
-        data = data.copy()
+        log_message(f"Applying exponential smoothing with alpha={alpha} on column '{column}'.")
 
+        data = data.copy()
         data["ES"] = data[column].ewm(alpha=alpha, adjust=False).mean()
+
+        log_message("Exponential smoothing applied successfully.")
 
         return data
 
-    def double_exponential_smoothing(self, data: pd.DataFrame, alpha: float=.9, beta: float=.1, 
+    def double_exponential_smoothing(self, data: pd.DataFrame, alpha: float = .9, beta: float = .1, 
                                     column: str = "FLClose") -> pd.DataFrame:
         """
         Performs double exponential smoothing on a time series.
@@ -230,31 +234,34 @@ class BasicFuture(HoltWinters):
         Returns:
         pd.DataFrame: DataFrame with the smoothed column and forecast appended.
         """
+        log_message(f"Applying double exponential smoothing with alpha={alpha} and beta={beta} on column '{column}'.")
+
         data = data.copy()
         series = data[column].values
         n = len(series)
         result = [series[0]]
-        
+
         # Initialization of level and trend
         level = series[0]
         trend = series[1] - series[0]
-        
+
         for t in range(1, n):
             value = series[t]
             last_level, level = level, alpha * value + (1 - alpha) * (level + trend)
             trend = beta * (level - last_level) + (1 - beta) * trend
             result.append(level + trend)
-        
+
         # Processing the last forecast
         result.append(level + trend)
-        
-        
+
         df = data.copy()
-        df["DES"] = result[:n] 
+        df["DES"] = result[:n]
+
+        log_message("Double exponential smoothing applied successfully.")
 
         return df
 
-    def confidence_interval(self, data:pd.DataFrame, n:int=24, column:str="FLClose", dropna:bool=True)->pd.DataFrame:
+    def confidence_interval(self, data: pd.DataFrame, n: int = 24, column: str = "FLClose", dropna: bool = True) -> pd.DataFrame:
         """
         Calculates the confidence interval for the moving average of the specified column.
 
@@ -262,28 +269,32 @@ class BasicFuture(HoltWinters):
         data (pd.DataFrame): The original DataFrame containing the time series.
         n (int): The window size for the moving standard deviation (default is 24).
         column (str): The name of the column for which to calculate the confidence interval (default is "Close").
-        dropna (bool): If True, removes rows with NaN values ​​(default is True).
+        dropna (bool): If True, removes rows with NaN values (default is True).
 
         Returns:
         pd.DataFrame: DataFrame with columns added for the upper and lower bounds of the confidence interval.
         """
+        log_message(f"Calculating confidence interval with window size {n} for column '{column}'.")
 
         df = data.copy()
 
         if len(df) < n:
+            log_message(f"Data length ({len(df)}) is less than window size ({n}).")
             raise ValueError(f"Data length ({len(df)}) is less than window size ({n}).")
 
         rolling_std = df[column].rolling(window=n).std()
-        
+
         df['Conf_upper_interval'] = df[column] + 1.96 * rolling_std
         df['Conf_lower_interval'] = df[column] - 1.96 * rolling_std
 
         if dropna:
             df.dropna(inplace=True)
 
+        log_message("Confidence interval calculated successfully.")
+
         return df
 
-    def all_indicators(self, data:pd.DataFrame):
+    def all_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Applies a series of indicator methods to the input DataFrame and returns the DataFrame with added features.
 
@@ -293,31 +304,34 @@ class BasicFuture(HoltWinters):
         Returns:
             pd.DataFrame: DataFrame with original and new features generated by the indicator methods.
         """
+        log_message("Applying all indicators to the data.")
 
         data = data.copy()
 
         class_methods = ['confidence_interval', 'double_exponential_smoothing', 
-                            'exponential_smoothing', 'triple_exponential_smoothing']
+                          'exponential_smoothing', 'triple_exponential_smoothing']
 
         data = self.create_lag_features(data)
         original_columns = data.columns
-        new_columns = [] 
+        new_columns = []
 
         for method in class_methods:
-
-            m = getattr(self, method)  
-            method_result = m(data) 
-            
-            new_columns.append(method_result.drop(columns=original_columns))
-            
+            try:
+                m = getattr(self, method)
+                method_result = m(data)
+                new_columns.append(method_result.drop(columns=original_columns))
+                log_message(f"Applied method: {method}.")
+            except Exception as e:
+                log_message(f"Error applying method '{method}': {e}")
 
         new_data = pd.concat(new_columns, axis=1)
-        merged_data = pd.merge( data, new_data, 
-                                left_index=True, right_index=True,
-                                how='inner')
-        
-        return merged_data
+        merged_data = pd.merge(data, new_data, 
+                               left_index=True, right_index=True,
+                               how='inner')
 
+        log_message("All indicators applied successfully.")
+
+        return merged_data
 
 
 if __name__ == "__main__":

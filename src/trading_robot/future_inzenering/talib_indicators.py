@@ -1,5 +1,5 @@
 from trading_robot.data_collection.data_collector import DataCollector, mt5
-
+from trading_robot.utils.logger import log_message
 import talib as tl
 import pandas as pd 
 import numpy as np
@@ -41,7 +41,8 @@ class TLIndicators:
         This function creates copies of the input data and adds pattern recognition tl_indicators to the dataframe.
         """
         
-        
+        log_message("Starting pattern recognition indicator calculations.")
+
         self._df["CDL2CROWS"] = tl.CDL2CROWS(self._Open, self._High, self._Low, self._Close) # type: ignore
         self._df["CDL3BLACKCROWS"] = tl.CDL3BLACKCROWS(self._Open, self._High, self._Low, self._Close)
         self._df["CDL3INSIDE"] = tl.CDL3INSIDE(self._Open, self._High, self._Low, self._Close) # type: ignore
@@ -104,6 +105,8 @@ class TLIndicators:
         self._df["CDLUPSIDEGAP2CROWS"] = tl.CDLUPSIDEGAP2CROWS(self._Open, self._High, self._Low, self._Close)
         self._df["CDLXSIDEGAP3METHODS"] = tl.CDLXSIDEGAP3METHODS(self._Open, self._High, self._Low, self._Close)
 
+        log_message("Completed pattern recognition indicator calculations.")
+
         return self._df.fillna(0)
 
     def calculate_overlap_studies(self, periods=[23,115,220]):
@@ -119,6 +122,8 @@ class TLIndicators:
     
         This function calculates various overlap studies based on the provided periods.
         """
+        log_message("Starting overlap studies calculations.")
+        
         new_data = {}
         for i in periods:
             new_data["DEMA"+str(i)] = tl.DEMA(self._Close, timeperiod=i)
@@ -136,6 +141,8 @@ class TLIndicators:
         new_data_df = pd.DataFrame(new_data, index=self._df.index)
         self._df = pd.concat([self._df, new_data_df], axis=1)
 
+        log_message("Completed overlap studies calculations.")
+
         return self._df.fillna(0)
 
     def math_transform_functions(self):
@@ -147,6 +154,7 @@ class TLIndicators:
     
         This function applies various mathematical transformation functions to the 'close' column.
         """
+        log_message("Starting mathematical transformation functions.")
 
         with np.errstate(invalid='ignore'):
             self._df["ACOS"] = np.where(np.abs(self._Close) > 1, np.nan, np.arccos(self._Close))
@@ -162,6 +170,8 @@ class TLIndicators:
         self._df["SQRT"] = np.sqrt(self._Close)
         self._df["TAN"] = np.tan(self._Close)
         self._df["TANH"] = np.tanh(self._Close)
+
+        log_message("Completed mathematical transformation functions.")
     
         return self._df.fillna(0)
 
@@ -178,9 +188,9 @@ class TLIndicators:
     
         This function applies various momentum indicator functions to the columns such as 'open', 'high', 'low', 'close', and 'real_volume'.
         """
+        log_message("Starting momentum indicator calculations.")
 
         new_data = {}
-        
         for i in periods:
             new_data["ADX" + str(i)] = tl.ADX(self._High, self._Low, self._Close, timeperiod=i)
             new_data["ADXR" + str(i)] = tl.ADXR(self._High, self._Low, self._Close, timeperiod=i)
@@ -208,7 +218,9 @@ class TLIndicators:
         self._df["APO"] = tl.APO(self._Close, fastperiod=12, slowperiod=26, matype=0)
         self._df["PPO"] = tl.PPO(self._Close, fastperiod=12, slowperiod=26, matype=0)
         self._df["real"] = tl.ULTOSC(self._High, self._Low, self._Close, timeperiod1=7, timeperiod2=14, timeperiod3=28)
-    
+
+        log_message("Completed momentum indicator calculations.")
+
         return self._df.fillna(0)
 
     def statistic_functions(self, periods=[23,115,220]):
@@ -224,8 +236,9 @@ class TLIndicators:
     
         This function applies various statistical functions to the columns such as 'high', 'low', and 'close'.
         """
+        log_message("Starting statistical functions calculations.")
+        
         new_data = {}
-
         for i in periods:
             new_data[f"BETA{i}"] = tl.BETA(self._High, self._Low, timeperiod=i)
             new_data[f"CORREL{i}"] = tl.CORREL(self._High, self._Low, timeperiod=i)
@@ -248,9 +261,10 @@ class TLIndicators:
 
         self._df = self._df.fillna(0)
 
+        log_message("Completed statistical functions calculations.")
+
         return self._df
     
-
     def math_operator_functions(self, periods=[23,115,220]):
         """
         Applies various mathematical operator functions to the input data.
@@ -264,8 +278,9 @@ class TLIndicators:
     
         This function applies various mathematical operator functions to the columns such as 'high', 'low', and 'close'.
         """
-        new_data = {}
+        log_message("Starting mathematical operator functions calculations.")
         
+        new_data = {}
         for i in periods:
             new_data["MAX"+str(i)] = tl.MAX(self._Close, timeperiod=i)
             new_data["MAXINDEX"+str(i)] = tl.MAXINDEX(self._Close, timeperiod=i)
@@ -279,7 +294,9 @@ class TLIndicators:
         self._df["ADD"] = self._High + self._Low
         self._df["DIV"] = self._High / self._Low
         self._df["SUB"] = self._High - self._Low
-    
+
+        log_message("Completed mathematical operator functions calculations.")
+
         return self._df.fillna(0)
 
     def all_talib_indicators(self ):
@@ -291,13 +308,19 @@ class TLIndicators:
     
         This function iterates over all available indicator methods in the class and adds their outputs to the input DataFrame.
         """
-    
+        log_message("Starting to add all TA-Lib indicators.")
+
         class_methods = [ methods for methods in dir(self) if not methods.startswith("_") and "all_talib_indicators" not in methods]
 
         for method in class_methods:
-            m = getattr(self, method)
-            m()
-            
+            try:
+                m = getattr(self, method)
+                m()
+            except Exception as e:
+                log_message(f"Error applying indicator method {method}: {e}")
+        
+        log_message("Completed adding all TA-Lib indicators.")
+
         return self._df
     
 

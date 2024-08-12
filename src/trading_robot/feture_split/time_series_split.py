@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 from trading_robot.data_collection.data_collector import DataCollector
+from trading_robot.utils.logger import log_message
 
 class TimeSeriesSplits:
     """
@@ -26,15 +27,26 @@ class TimeSeriesSplits:
         Returns:
         X_train, y_train, X_test, y_test - divided data.
         """
-        split = int((1 - test_size) * len(data))
         
-        X = data.drop(columns=[y_col])
-        y = data[y_col]
-        
-        X_train, X_test = X[:split], X[split:]
-        y_train, y_test = y[:split], y[split:]
+        log_message(f"Starting train-test split with test_size={test_size} for data with {len(data)} rows.")
 
-        return X_train, y_train, X_test, y_test
+        try:
+            split = int((1 - test_size) * len(data))
+            log_message(f"Data will be split at index {split}. Training data will have {split} rows, test data will have {len(data) - split} rows.")
+            
+            X = data.drop(columns=[y_col])
+            y = data[y_col]
+            
+            X_train, X_test = X[:split], X[split:]
+            y_train, y_test = y[:split], y[split:]
+
+            log_message("Train-test split completed successfully.")
+            
+            return X_train, y_train, X_test, y_test
+        
+        except Exception as e:
+            log_message(f"Error occurred during train-test split: {e}")
+            return None, None, None, None
 
     def create_sequences(self, data: pd.DataFrame, y_col: str = "Close", sequence_length: int = 32):
         """
@@ -49,18 +61,30 @@ class TimeSeriesSplits:
         - sequences: np.array - an array of sequences of signs.
         - Labels: NP.array - an array of marks.
         """
+        log_message("Starting to create sequences.")
 
-        sequences = []
-        labels = []
+        try:
+            log_message(f"Creating sequences with sequence_length={sequence_length} and target column='{y_col}'.")
 
-        X = data.drop(columns=[y_col]).values
-        y = data[y_col].values
+            sequences = []
+            labels = []
 
-        for i in range(len(data) - sequence_length):
-            sequences.append(X[i:i + sequence_length])
-            labels.append(y[i + sequence_length])
+            X = data.drop(columns=[y_col]).values
+            y = data[y_col].values
+
+            for i in range(len(data) - sequence_length):
+                sequences.append(X[i:i + sequence_length])
+                labels.append(y[i + sequence_length])
+
+            sequences = np.array(sequences)
+            labels = np.array(labels)
+
+            log_message(f"Created {len(sequences)} sequences with length {sequence_length}.")
+            return sequences, labels
         
-        return np.array(sequences), np.array(labels)
+        except Exception as e:
+            log_message(f"Error occurred while creating sequences: {e}")
+            return np.array([]), np.array([])
     
 
 

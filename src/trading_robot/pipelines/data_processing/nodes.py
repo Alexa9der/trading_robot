@@ -4,6 +4,7 @@ load_dotenv()
 from typing import Dict, Any
 
 # Import classes from the appropriate modules
+from trading_robot.utils.logger import log_message
 from trading_robot.data_collection.data_collector import DataCollector
 from trading_robot.future_inzenering.basic_future_inz import BasicFuture
 from trading_robot.future_inzenering.talib_indicators import TLIndicators
@@ -21,18 +22,24 @@ from trading_robot.feture_split.time_series_split import TimeSeriesSplits
 
 def nodes_load_data() -> Dict[str, Any]:
 
+    log_message("Starting data loading nodes.")
+
     loader = DataCollector()
     data = loader.get_historical_data('EURUSD')
+
+    log_message(f"Data loaded nodes successfully. Data keys: {list(data.keys())}")
 
     return data
 
 def nodes_inzener_features(data: Dict[str, Any]) -> Dict[str, Any]:
 
+    log_message("Starting feature engineering nodes.")
+
     bf = BasicFuture()
-    data = bf.create_lag_features(data, column="Open", end=1)
-    data = bf.create_lag_features(data, column="High", end=1)
-    data = bf.create_lag_features(data, column="Low", end=1)
-    data = bf.create_lag_features(data, column="Volume", end=1)
+
+    for column in ["Open", "High", "Low", "Volume"]:
+        data = bf.create_lag_features(data, column=column, end=1)
+
     data = bf.create_lag_features(data, column="Close")
     data = bf.double_exponential_smoothing(data)
     data = bf.exponential_smoothing(data)
@@ -42,9 +49,13 @@ def nodes_inzener_features(data: Dict[str, Any]) -> Dict[str, Any]:
     tl = TLIndicators(data=data)
     data = tl.all_talib_indicators()
 
+    log_message("Feature engineering nodes completed.")
+                
     return data
 
 def nodes_select_features(data: Dict[str, Any]) -> Dict[str, Any]:
+
+    log_message("Starting feature selection nodes.")
 
     bfs = BasicFeatureSelector()
     target = "Close"
@@ -60,12 +71,20 @@ def nodes_select_features(data: Dict[str, Any]) -> Dict[str, Any]:
     feture = bfs.filter_correlated_features(data[columns])
     feture = feture + lag_col + [target]
 
+    log_message(f"Final nodes selected features: {feture}")
+
     return data[feture]
 
 def nodes_train_test_split(data: Dict[str, Any]) -> Dict[str, Any]:
 
+    log_message("Starting train-test split nodes.")
+
     splitter = TimeSeriesSplits()
     X_train, y_train, X_test, y_test = splitter.train_test_split(data, "Close")
+
+    log_message("Train-test split nodes completed.")
+    log_message(f"Training data size: X_train: {X_train.shape}, y_train: {y_train.shape}")
+    log_message(f"Testing data size: X_test: {X_test.shape}, y_test: {y_test.shape}")
 
     return X_train, y_train, X_test, y_test
 

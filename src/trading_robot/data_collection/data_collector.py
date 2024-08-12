@@ -1,7 +1,7 @@
 import pandas as pd
 from trading_robot.connectors.docker_connector import mt5
 from trading_robot.connectors.connect_mt5 import ConnectMT5
-
+from trading_robot.utils.logger import log_message
 
 
 
@@ -35,20 +35,28 @@ class DataCollector(ConnectMT5):
         Returns:
         - pd.DataFrame: DataFrame containing the received historical data.
         """
+
         if not self._connect_to_mt5():
-            print("Error connecting to MetaTrader 5.")
+            log_message("Failed to connect to MetaTrader 5. Please check the connection settings.")
             return None
 
         try:
             rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+            
+            if rates is None or len(rates) == 0:
+                log_message(f"Received no data for symbol: {symbol}, timeframe: {timeframe}.")
+                return None
+        
         except Exception as e:
-            print("Error while receiving data:", mt5.last_error())
-            print(f"Function get_historical_data Error while receiving data: {e}")
+            log_message(f"Exception occurred while receiving data for symbol: {symbol}, timeframe: {timeframe}. Exception: {str(e)}")
+            log_message(f"MetaTrader 5 last error: {mt5.last_error()}")
             return None
+
         finally:
             mt5.shutdown()
 
         if rates is not None and len(rates) > 0:
+            log_message(f"Data retrieved successfully for symbol: {symbol}, timeframe: {timeframe}, count: {count}")
             rates_frame = pd.DataFrame(rates)
             rates_frame['time'] = pd.to_datetime(rates_frame['time'], unit='s')
             rates_frame = rates_frame.rename(columns={"time": "Date", 'tick_volume': 'Volume'})
@@ -56,27 +64,36 @@ class DataCollector(ConnectMT5):
             rates_frame = rates_frame.set_index("Date")
             return rates_frame[['Open', 'Close', 'High', 'Low', 'Volume']]
         else:
-            print("Error while receiving data.")
-            return None
+            if rates is None:
+                log_message(f"Failed to retrieve data: 'rates' is None for symbol: {symbol}, timeframe: {timeframe}")
+            else:
+                log_message(f"Failed to retrieve data: 'rates' is an empty list for symbol: {symbol}, timeframe: {timeframe}")
 
     def get_all_symbols(self):
         """
-        Gets a list of all available symbols in MetaTrader 5.
+        Retrieves a list of all available symbols in MetaTrader 5.
 
         Returns:
-        - list: List of characters.
+        - list: List of symbol names, or None if an error occurred.
         """
         if not self._connect_to_mt5():
-            print("Error connecting to MetaTrader 5.")
+            log_message("Failed to connect to MetaTrader 5. Please check the connection settings.")
             return None
 
         try:
             symbols_info = mt5.symbols_get()
             symbols = [symbol.name for symbol in symbols_info]
+            
+            if not symbols:
+                log_message("No symbols found in MetaTrader 5.")
+                return None
+
             return symbols
+        
         except Exception as e:
-            print(f"Error when retrieving a list of symbols: {e}")
+            log_message(f"Error occurred while retrieving the list of symbols: {e}")
             return None
+
         finally:
             mt5.shutdown()
 
@@ -85,5 +102,9 @@ class DataCollector(ConnectMT5):
 if __name__ == "__main__":
 
     dc = DataCollector()
+
     data = dc.get_historical_data('EURUSD')
     print(data )
+
+    # print(dc.get_all_symbols())
+

@@ -7,7 +7,7 @@ from sklearn.feature_selection import mutual_info_regression
 from trading_robot.data_collection.data_collector import DataCollector, mt5
 from trading_robot.future_inzenering.talib_indicators import TLIndicators
 from trading_robot.future_inzenering.basic_future_inz import BasicFuture
-
+from trading_robot.utils.logger import log_message
 
 
 class BasicFeatureSelector:
@@ -35,12 +35,15 @@ class BasicFeatureSelector:
         -----------
         - list - a list of feature names that have low correlation with other features.
         """
+        log_message("Starting feature removal based on variance.")
 
         # Calculate variance for each column
         variance = data.var()
 
         # Select columns with variance above the threshold
         variance_above_threshold = variance[variance > threshold].index.tolist()
+
+        log_message(f"Features with variance above threshold {threshold}: {variance_above_threshold}")
 
         # Return DataFrame only with the required columns
         return variance_above_threshold
@@ -70,7 +73,10 @@ class BasicFeatureSelector:
         - list - a list of feature names that have low correlation with other features.
         """
 
+        log_message(f"Filtering features by Spearman correlation with target '{target}'.")
+
         if target not in data.columns:
+            logger.error(f"Target variable '{target}' not found in the data.")
             raise ValueError(f"Target variable '{target}' not found in the data.")
 
         
@@ -97,6 +103,8 @@ class BasicFeatureSelector:
         filtered_data = data[filtered_df.index]
         filtered_data = filtered_data.join(Y)
 
+        log_message(f"Selected features by Spearman correlation: {filtered_df.index.tolist() + [target]}")
+        
         return filtered_df.index.tolist() + [target]
 
     def filter_correlated_features(self, data: pd.DataFrame, corr_threshold: float = 0.8) -> list:
@@ -111,7 +119,8 @@ class BasicFeatureSelector:
         Returns:
         - list - a list of feature names that have low correlation with other features.
         """
-        
+        log_message(f"Filtering features by Pearson correlation with threshold {corr_threshold}.")
+
         # Compute the Pearson correlation matrix
         corr_matrix = data.corr(method='pearson')
         
@@ -129,6 +138,8 @@ class BasicFeatureSelector:
         all_features = set(data.columns)
         low_corr_features = all_features - high_corr_features
         
+        log_message(f"Selected features with low correlation: {list(low_corr_features)}")
+
         return list(low_corr_features)
 
     def select_features_by_mutual_info(self, data: pd.DataFrame, target: str = "Close", mi_threshold: float = 0.1) -> list:
@@ -143,19 +154,21 @@ class BasicFeatureSelector:
         Returns:
         - list - a list of feature names that have low correlation with other features.
         """
-        
+        log_message(f"Selecting features by mutual information with target '{target}' and threshold {mi_threshold}.")
+
         X = data.drop(columns=[target])
         target = data[target]
         
         mi = mutual_info_regression(X, target)
         
-        # Создаем словарь с именами признаков и их взаимной информацией
+        # Create a dictionary with feature names and their mutual information
         mi_series = pd.Series(mi, index=X.columns)
         
-        # Фильтруем признаки по порогу взаимной информации
+        # Filter features by mutual information threshold
         selected_features = mi_series[mi_series >= mi_threshold].index.tolist()
         
-        # Возвращаем датафрейм с отобранными лагами
+        log_message(f"Selected features by mutual information: {selected_features}")
+        
         return selected_features
 
 
