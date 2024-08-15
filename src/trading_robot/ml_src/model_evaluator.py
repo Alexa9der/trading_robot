@@ -1,13 +1,11 @@
 import pandas as pd 
 import numpy as np
 from datetime import datetime
-import matplotlib.pyplot as plt
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 
 import mlflow
 import mlflow.sklearn
 
-import sklearn
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
@@ -19,7 +17,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.base import BaseEstimator
 
-from sklearn.metrics import make_scorer, mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import make_scorer, mean_squared_error
 
 from trading_robot.data_collection.data_collector import DataCollector
 from trading_robot.utils.logger import log_message
@@ -66,12 +64,12 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         Returns a dictionary of parameter grids for hyperparameter tuning.
     """
 
-    def __init__(self):
+    def __init__(self, scaler = None):
         """
         Initializes the TimeSeriesModelEvaluator with a StandardScaler for feature scaling.
         """
         super().__init__()
-        self.scaler = StandardScaler()
+        self.scaler = scaler if scaler is not None else StandardScaler()
 
     def timeseriesCVscore(self, model, data: pd.DataFrame, y_col: str, cv: int = 5) -> float:
         """
@@ -119,9 +117,9 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         return mean_error
 
-    def timeseries_grid_search(self, model : Dict[str, BaseEstimator], param_grid : Dict[str, List[Union[float, int, str]]],
-                               X: pd.DataFrame, y: pd.Series,
-                               cv: int = 5, model_name: str | None = None):
+    def timeseries_grid_search(self, model : BaseEstimator, param_grid : Dict[str, List[Union[float, int, str]]],
+                               X: pd.DataFrame, y: pd.Series, cv: int = 5, 
+                               model_name: str | None = None, mlflow_log_metrics : bool = True):
         """
         Searches for the best hyperparameters for the model using GridSearchCV with time series cross-validation.
 
@@ -129,24 +127,47 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         ----------
         model : BaseEstimator
             A model instance for learning (e.g., RandomForestRegressor).
-        param_grid : dict
-            Dictionary with parameters to search through.
+        param_grid : Dict[str, List[Union[float, int, str]]]
+            Dictionary with parameters to search through, where the keys are the parameter names and 
+            the values are lists of parameter settings to try.
         X : pd.DataFrame
-            DataFrame containing features.
+            DataFrame containing features for training the model.
         y : pd.Series
-            Series containing the target variable.
+            Series containing the target variable for training the model.
         cv : int, optional
-            The number of folds for cross-validation. Default is 5.
+            The number of folds for time series cross-validation. Default is 5.
         model_name : str, optional
-            The name of the model being tuned. Default is None.
+            The name of the model being tuned. This name is used in logging and can be helpful 
+            when tracking experiments. Default is None.
+        mlflow_log_metrics : bool, optional
+            If True, logs additional metrics and results to MLflow. Default is True.
 
         Returns:
         -------
         GridSearchCV
-            The GridSearchCV object containing the best model parameters and scores.
-        """
+            The GridSearchCV object containing the best model parameters and scores, along with other 
+            details about the cross-validation process.
 
-        log_message(f"Starting grid search with TimeSeriesSplit.")
+        Notes:
+        ------
+        - The function uses TimeSeriesSplit for cross-validation, which is suitable for time series data
+        where the order of observations is important.
+        - A custom RMSE (Root Mean Square Error) scorer is used to evaluate the models.
+        - If mlflow_log_metrics is set to True, additional metrics and details are logged to MLflow 
+        to help track the performance of the model with the chosen parameters.
+        
+        Example:
+        --------
+        >>> model = RandomForestRegressor()
+        >>> param_grid = {
+        >>>     'n_estimators': [100, 200],
+        >>>     'max_depth': [10, 20, None],
+        >>> }
+        >>> grid_search_result = timeseries_grid_search(model, param_grid, X, y, cv=5, model_name='RandomForest')
+        >>> print(grid_search_result.best_params_)
+        """
+        
+        log_message(f"Starting grid search with TimeSeriesSplit for model '{model_name}'.")
 
         scorer = make_scorer(self.rmse)
 
@@ -156,38 +177,69 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         grid_search.fit(X, y)
 
-        log_message(f"Model name: {model_name}")
         log_message(f"Best parameters found: {grid_search.best_params_}")
         log_message(f"Best score achieved: {grid_search.best_score_}")
 
         # Log additional metrics and data
-        self.__log_additional_metrics(grid_search, X, y, model_name)
+        if mlflow_log_metrics:
+            log_message(f"Logging additional metrics to MLflow.")
+            self._log_additional_metrics(grid_search, X, y, model_name, self.scaler)
         
         return grid_search
     
-    def tune_and_log_models(self, X: pd.DataFrame, y: pd.Series, models=None, param_grids=None, cv=5, deploy=True):
+    def tune_and_log_models(self, X: pd.DataFrame, y: pd.Series, 
+                            models : None | Dict[str, BaseEstimator] = None, 
+                            param_grids : None | Dict[str, Dict[str, List[Union[float, int, str]]]] = None, 
+                            cv=5, deploy=True, mlflow_log_metrics : bool = True):
         """
-        Tunes models, selects hyperparameters, and logs the best models in MLflow with RMSE. Optionally deploys the best model.
+        Tunes multiple models by selecting the best hyperparameters, logs the models and their metrics to MLflow, 
+        and optionally deploys the best model.
 
         Parameters:
         ----------
         X : pd.DataFrame
-            DataFrame containing features.
+            DataFrame containing the features used for training the models.
         y : pd.Series
-            Series containing the target variable.
+            Series containing the target variable for training the models.
         models : dict, optional
-            Dictionary of model names and instances. Default is None, which uses built-in models.
+            A dictionary where keys are model names and values are instances of the models (e.g., {'ridge': Ridge(), 'lasso': Lasso()}).
+            Default is None, which will use predefined models.
         param_grids : dict, optional
-            Dictionary of parameter grids for each model. Default is None, which uses built-in parameters.
+            A dictionary where keys are model names and values are parameter grids for those models. 
+            Each parameter grid is a dictionary where the keys are parameter names and the values are lists of parameter values to try.
+            Default is None, which will use predefined parameter grids.
         cv : int, optional
             The number of folds for cross-validation. Default is 5.
         deploy : bool, optional
-            Whether to deploy the best model after tuning. Default is True.
+            Whether to deploy the best model after hyperparameter tuning and model selection. Default is True.
+        mlflow_log_metrics : bool, optional
+            If True, logs additional metrics and model parameters to MLflow for tracking. Default is True.
 
         Returns:
         -------
         dict
-            Dictionary containing RMSE values for each model.
+            A dictionary where keys are model names and values are dictionaries containing the RMSE values 
+            ('rmse' key) for the corresponding models.
+
+        Notes:
+        ------
+        - This function iterates over the provided models, applies grid search with time series cross-validation, 
+        and logs the best model for each algorithm to MLflow.
+        - The best model across all candidates, based on RMSE, can be automatically deployed if `deploy` is set to True.
+        - The function also handles data preprocessing, including scaling of features, to ensure consistency 
+        during the model training and evaluation processes.
+        - The example input data is captured from the last row of the scaled features, which is used in the model registration process.
+
+        Example:
+        --------
+        >>> from sklearn.linear_model import Ridge, Lasso
+        >>> model_dict = {'ridge': Ridge(), 'lasso': Lasso()}
+        >>> param_grid_dict = {
+        >>>     'ridge': {'alpha': [0.1, 1.0, 10.0]},
+        >>>     'lasso': {'alpha': [0.001, 0.01, 0.1]}
+        >>> }
+        >>> results = tune_and_log_models(X, y, models=model_dict, param_grids=param_grid_dict, cv=5, deploy=True)
+        >>> print(results)
         """
         if models is None:
             models = self.__model()
@@ -203,13 +255,14 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         # Scale features and retain feature names
         X_scaled = pd.DataFrame(self.scaler.fit_transform(X), columns=X.columns)
 
-        example_input = X_scaled.tail(1).to_dict(orient='records')[0]
-
         selected_model_rmse = np.inf
         selected_model = None
         selected_model_name = None
+        run_id = None
+
         parent_run_name = f"Model_Tuning_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-        
+        log_message(f"Starting model tuning with parent run name: {parent_run_name}")
+
         with mlflow.start_run(run_name=parent_run_name) as parent_run:
             for model_name, candidate_model in models.items():
                 with mlflow.start_run(run_name=model_name, nested=True):
@@ -221,7 +274,8 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                         X=X_scaled,
                         y=y,
                         cv=cv,
-                        model_name=model_name
+                        model_name=model_name,
+                        mlflow_log_metrics = mlflow_log_metrics
                     )
 
                     best_model = grid_search.best_estimator_
@@ -234,14 +288,21 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                         selected_model_rmse = best_rmse
                         selected_model = best_model
                         selected_model_name = model_name
+                        active_run = mlflow.active_run()
+                        run_id = active_run.info.run_id
 
             # Register and deploy the best model if required
             if deploy and selected_model is not None:
+                example_input = X_scaled.tail(1).to_dict(orient='records')[0]
 
+
+                log_message(f"Deploying the best model: {selected_model_name}")
                 # The best model should be registered and deployed
                 # Here we assume `selected_model` has the necessary attributes to register
-                self.register_and_deploy_best_model(best_model=selected_model, model_name=selected_model_name, example_input=example_input)
+                self.register_and_deploy_best_model(run_id=run_id, best_model=selected_model, model_name=selected_model_name, 
+                                                    example_input=example_input, scaler= self.scaler )
 
+        log_message("Model tuning and logging complete")
         return results
 
     def rmse(self, y_true: pd.Series, y_pred: pd.Series):
@@ -261,81 +322,6 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
             The RMSE value.
         """
         return np.sqrt(mean_squared_error(y_true, y_pred))
-
-    def __log_additional_metrics(self, grid_search, X : pd.DataFrame, y: pd.Series, 
-                                 model_name : str):
-        """
-        Logs additional metrics and data to MLflow.
-
-        Parameters:
-        ----------
-        grid_search : GridSearchCV
-            The GridSearchCV object containing cross-validation results.
-        X : pd.DataFrame
-            DataFrame containing features.
-        y : pd.Series
-            Series containing the target variable.
-        model_name : str
-            Name of the model being logged.
-        """
-
-        best_model = grid_search.best_estimator_
-        best_params = grid_search.best_params_
-
-        # Log sample predictions
-        predictions = best_model.predict(X)
-
-        # Logging an example of the model's results
-        prediction_df = pd.DataFrame({'y_true': y, 'y_pred': predictions})
-        prediction_df.index = prediction_df.index.astype(str)
-        mlflow.log_dict(prediction_df.head(10).to_dict(), "sample_predictions.json")
-
-        # log metric
-        r2 = r2_score(y, predictions)
-        mae = mean_absolute_error(y, predictions)
-
-        mlflow.log_metric("R2", r2)
-        mlflow.log_metric("MAE", mae)
-        mlflow.log_metric("rmse", grid_search.best_score_)
-
-        # Log model
-        example_input = X.tail(1).to_dict(orient='records')[0]
-        mlflow.sklearn.log_model(best_model, "model", input_example=example_input)
-        mlflow.log_params(best_params)
-
-        # Log all cross-validation results
-        results_df = pd.DataFrame(grid_search.cv_results_)
-        mlflow.log_dict(results_df.to_dict(), "cv_results.json")
-
-        # Log feature importances
-        if hasattr(best_model, 'feature_importances_'):
-            feature_importances = best_model.feature_importances_
-            importance_dict = dict(zip(X.columns, feature_importances))
-            mlflow.log_dict(importance_dict, "feature_importances.json")
-
-            plt.figure(figsize=(10, 6))
-            plt.barh(X.columns, feature_importances)
-            plt.xlabel("Feature Importance")
-            plt.title(f"Feature Importance for {model_name}")
-            plt.savefig("feature_importances.png")
-            mlflow.log_artifact("feature_importances.png")
-            plt.close()
-
-        # Log scaler parameters
-        if hasattr(self.scaler, 'mean_') and hasattr(self.scaler, 'scale_'):
-            mlflow.log_dict({
-                'mean': self.scaler.mean_.tolist(),
-                'scale': self.scaler.scale_.tolist()
-            }, "scaler_params.json")
-
-        # Log dataset metadata
-        mlflow.log_param("n_samples", X.shape[0])
-        mlflow.log_param("n_features", X.shape[1])
-        mlflow.log_param("last_data_update", datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-
-        # Log library versions
-        mlflow.log_param("pandas_version", pd.__version__)
-        mlflow.log_param("sklearn_version", sklearn.__version__)
 
     def __model(self):
         """
@@ -455,7 +441,8 @@ if __name__ == "__main__":
         }
     }
 
-    results = tsem.tune_and_log_models(X, y, models=models, param_grids=params, deploy=True)
+    results = tsem.tune_and_log_models(X, y, models=models, param_grids=params, 
+                                       deploy= True, mlflow_log_metrics = True)
     print(results)
 
 
