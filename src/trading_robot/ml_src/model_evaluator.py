@@ -54,14 +54,6 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
     rmse(y_true, y_pred) -> float
         Calculates Root Mean Squared Error (RMSE).
 
-    __log_additional_metrics(grid_search, X, y, model_name)
-        Logs additional metrics and data to MLflow.
-
-    __model() -> dict
-        Returns a dictionary of models available for evaluation.
-
-    __param() -> dict
-        Returns a dictionary of parameter grids for hyperparameter tuning.
     """
 
     def __init__(self, scaler = None):
@@ -117,9 +109,9 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         return mean_error
 
-    def timeseries_grid_search(self, model : BaseEstimator, param_grid : Dict[str, List[Union[float, int, str]]],
-                               X: pd.DataFrame, y: pd.Series, cv: int = 5, 
-                               model_name: str | None = None, mlflow_log_metrics : bool = True):
+    def timeseries_grid_search(self, model : BaseEstimator, 
+                               param_grid : Dict[str, List[Union[float, int, str]]],
+                               X: pd.DataFrame, y: pd.Series, cv: int = 5):
         """
         Searches for the best hyperparameters for the model using GridSearchCV with time series cross-validation.
 
@@ -136,12 +128,6 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
             Series containing the target variable for training the model.
         cv : int, optional
             The number of folds for time series cross-validation. Default is 5.
-        model_name : str, optional
-            The name of the model being tuned. This name is used in logging and can be helpful 
-            when tracking experiments. Default is None.
-        mlflow_log_metrics : bool, optional
-            If True, logs additional metrics and results to MLflow. Default is True.
-
         Returns:
         -------
         GridSearchCV
@@ -163,12 +149,10 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         >>>     'n_estimators': [100, 200],
         >>>     'max_depth': [10, 20, None],
         >>> }
-        >>> grid_search_result = timeseries_grid_search(model, param_grid, X, y, cv=5, model_name='RandomForest')
+        >>> grid_search_result = timeseries_grid_search(model, param_grid, X, y, cv=5)
         >>> print(grid_search_result.best_params_)
         """
         
-        log_message(f"Starting grid search with TimeSeriesSplit for model '{model_name}'.")
-
         scorer = make_scorer(self.rmse)
 
         grid_search = GridSearchCV(estimator=model, param_grid=param_grid, 
@@ -179,18 +163,13 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         log_message(f"Best parameters found: {grid_search.best_params_}")
         log_message(f"Best score achieved: {grid_search.best_score_}")
-
-        # Log additional metrics and data
-        if mlflow_log_metrics:
-            log_message(f"Logging additional metrics to MLflow.")
-            self._log_additional_metrics(grid_search, X, y, model_name, self.scaler)
         
         return grid_search
     
     def tune_and_log_models(self, X: pd.DataFrame, y: pd.Series, 
                             models : None | Dict[str, BaseEstimator] = None, 
                             param_grids : None | Dict[str, Dict[str, List[Union[float, int, str]]]] = None, 
-                            cv=5, deploy=True, mlflow_log_metrics : bool = True):
+                            cv=5, mlflow_log_metrics : bool = True, deploy=True):
         """
         Tunes multiple models by selecting the best hyperparameters, logs the models and their metrics to MLflow, 
         and optionally deploys the best model.
@@ -247,14 +226,9 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         if param_grids is None:
             param_grids = self.__param()
 
+        X = self.__transform(X)
+
         results = {}
-
-        # Convert data types to avoid issues with NaN in int columns
-        X = X.astype(np.float64)
-
-        # Scale features and retain feature names
-        X_scaled = pd.DataFrame(self.scaler.fit_transform(X), columns=X.columns)
-
         selected_model_rmse = np.inf
         selected_model = None
         selected_model_name = None
@@ -266,16 +240,17 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         with mlflow.start_run(run_name=parent_run_name) as parent_run:
             for model_name, candidate_model in models.items():
                 with mlflow.start_run(run_name=model_name, nested=True):
+
+                    log_message(f"Starting grid search with TimeSeriesSplit for model '{model_name}'.")
+
                     param_grid = param_grids.get(model_name, {})
 
                     grid_search = self.timeseries_grid_search(
                         model=candidate_model,
                         param_grid=param_grid,
-                        X=X_scaled,
+                        X=X,
                         y=y,
                         cv=cv,
-                        model_name=model_name,
-                        mlflow_log_metrics = mlflow_log_metrics
                     )
 
                     best_model = grid_search.best_estimator_
@@ -291,9 +266,14 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                         active_run = mlflow.active_run()
                         run_id = active_run.info.run_id
 
+                    # Log additional metrics and data
+                    if mlflow_log_metrics:
+                        log_message(f"Logging additional metrics to MLflow.")
+                        self._log_additional_metrics(grid_search, X, y, model_name, self.scaler)
+
             # Register and deploy the best model if required
             if deploy and selected_model is not None:
-                example_input = X_scaled.tail(1).to_dict(orient='records')[0]
+                example_input = X.tail(1).to_dict(orient='records')[0]
 
 
                 log_message(f"Deploying the best model: {selected_model_name}")
@@ -408,6 +388,70 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         return params
 
+    def __is_fitted(self, transformer: BaseEstimator):
+        """
+        The function checks if the transformer from Scikit-learn is trained.
+
+        :param transformer: transformer object (e.g. StandardScaler, MinMaxScaler, PCA)
+        :return: True if the transformer is trained, otherwise False
+        """
+        fitted_attributes = {
+            'StandardScaler': 'n_samples_seen_',
+            'MinMaxScaler': 'min_',
+            'MaxAbsScaler': 'scale_',
+            'RobustScaler': 'center_',
+            'Normalizer': 'n_features_in_',  
+            'PCA': 'components_',
+            'KernelPCA': 'dual_coef_',
+            'IncrementalPCA': 'components_',
+            'TruncatedSVD': 'components_',
+            'NMF': 'components_',
+            'FactorAnalysis': 'components_',
+            'DictionaryLearning': 'components_',
+            'FastICA': 'components_',
+            'GaussianRandomProjection': 'components_',
+            'SparseRandomProjection': 'components_',
+            'Binarizer': 'threshold',  
+            'QuantileTransformer': 'n_quantiles_',
+            'PowerTransformer': 'lambdas_',
+            'FunctionTransformer': 'n_features_in_',  
+        }
+        
+        transformer_name = transformer.__class__.__name__
+        attribute = fitted_attributes.get(transformer_name)
+        
+        if attribute:
+            return hasattr(transformer, attribute)
+        else:
+            raise ValueError(f"Unknown transformer: {transformer_name}")
+        
+    def __transform(self, X:  pd.DataFrame):
+        """
+        Applies scaling to the input data if the scaler has not been fitted.
+        
+        This method ensures that all data types in the DataFrame are converted to float64 to
+        avoid issues with NaN values in integer columns. If the scaler has already been fitted, 
+        it simply returns the input data as is. Otherwise, it fits the scaler to the input data, 
+        scales the data, and returns the scaled DataFrame with the original column names.
+        
+        :param X: pd.DataFrame - The input data to be transformed.
+        :return: pd.DataFrame - The transformed (scaled) data.
+        """
+        
+        # Convert data types to avoid issues with NaN in integer columns
+        X = X.astype(np.float64)
+
+        # Check if the scaler has already been fitted
+        if self.__is_fitted(self.scaler):
+            # If the scaler is fitted, return the data as is
+            X_scaled = X
+        else:
+            # If the scaler is not fitted, fit and transform the data
+            # Convert the scaled data back into a DataFrame, retaining original column names
+            X_scaled = pd.DataFrame(self.scaler.fit_transform(X), columns=X.columns)
+
+        # Return the scaled data
+        return X_scaled
 
 if __name__ == "__main__":
 
