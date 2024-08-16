@@ -1,8 +1,10 @@
 import pandas as pd 
 import numpy as np
-from scipy.stats import spearmanr
-from sklearn.feature_selection import mutual_info_regression
 
+from scipy.stats import spearmanr
+
+from sklearn.discriminant_analysis import StandardScaler
+from sklearn.feature_selection import mutual_info_regression
 
 from trading_robot.data_collection.data_collector import DataCollector, mt5
 from trading_robot.future_inzenering.talib_indicators import TLIndicators
@@ -76,7 +78,7 @@ class BasicFeatureSelector:
         log_message(f"Filtering features by Spearman correlation with target '{target}'.")
 
         if target not in data.columns:
-            logger.error(f"Target variable '{target}' not found in the data.")
+            print(f"Target variable '{target}' not found in the data.")
             raise ValueError(f"Target variable '{target}' not found in the data.")
 
         
@@ -120,6 +122,9 @@ class BasicFeatureSelector:
         - list - a list of feature names that have low correlation with other features.
         """
         log_message(f"Filtering features by Pearson correlation with threshold {corr_threshold}.")
+
+        scaler = StandardScaler()
+        data = pd.DataFrame(scaler.fit_transform(data), columns=data.columns)
 
         # Compute the Pearson correlation matrix
         corr_matrix = data.corr(method='pearson')
