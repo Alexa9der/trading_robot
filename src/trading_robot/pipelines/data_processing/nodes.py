@@ -1,7 +1,4 @@
-from dotenv import load_dotenv
-load_dotenv()
-
-from typing import Dict, Any
+import pandas as pd
 
 # Import classes from the appropriate modules
 from trading_robot.utils.logger import log_message
@@ -9,18 +6,10 @@ from trading_robot.data_collection.data_collector import DataCollector
 from trading_robot.future_inzenering.basic_future_inz import BasicFuture
 from trading_robot.future_inzenering.talib_indicators import TLIndicators
 from trading_robot.future_selection.basic_feature_selector import BasicFeatureSelector
-from trading_robot.feture_split.time_series_split import TimeSeriesSplits
-
-# from model.model_evaluator import TimeSeriesModelEvaluator
-# from analysis.analyze_liquidity import AnalyzeLiquidity
-# from strategies.strategy import Strategy
-# from strategies.tuner import SMATuner
-# from traiding.risk_manager import RiskManager
-# from traiding.trading import Trading
-# from utils.message import PushbulletMagic
 
 
-def nodes_load_data() -> Dict[str, Any]:
+
+def nodes_load_data() -> pd.DataFrame:
 
     log_message("Starting data loading nodes.")
 
@@ -31,7 +20,7 @@ def nodes_load_data() -> Dict[str, Any]:
 
     return data
 
-def nodes_inzener_features(data: Dict[str, Any]) -> Dict[str, Any]:
+def nodes_inzener_features(data: pd.DataFrame) -> pd.DataFrame:
 
     log_message("Starting feature engineering nodes.")
 
@@ -53,7 +42,7 @@ def nodes_inzener_features(data: Dict[str, Any]) -> Dict[str, Any]:
                 
     return data
 
-def nodes_select_features(data: Dict[str, Any]) -> Dict[str, Any]:
+def nodes_select_features(data: pd.DataFrame) -> pd.DataFrame:
 
     log_message("Starting feature selection nodes.")
 
@@ -75,23 +64,5 @@ def nodes_select_features(data: Dict[str, Any]) -> Dict[str, Any]:
 
     return data[feture]
 
-def nodes_train_test_split(data: Dict[str, Any]) -> Dict[str, Any]:
 
-    log_message("Starting train-test split nodes.")
-
-    splitter = TimeSeriesSplits()
-    X_train, y_train, X_test, y_test = splitter.train_test_split(data, "Close")
-
-    log_message("Train-test split nodes completed.")
-    log_message(f"Training data size: X_train: {X_train.shape}, y_train: {y_train.shape}")
-    log_message(f"Testing data size: X_test: {X_test.shape}, y_test: {y_test.shape}")
-
-    return X_train, y_train, X_test, y_test
-
-
-
-if __name__ == "__main__":
-    data = nodes_load_data()
-    data = nodes_inzener_features(data)
-    data = nodes_select_features(data)
-    X_train, y_train, X_test, y_test = nodes_train_test_split(data)
+    

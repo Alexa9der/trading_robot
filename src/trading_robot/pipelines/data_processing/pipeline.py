@@ -1,8 +1,8 @@
 from kedro.pipeline import Pipeline, node, pipeline
-from trading_robot.pipelines.data_processing.nodes import nodes_load_data, nodes_inzener_features, nodes_select_features, nodes_train_test_split 
+from trading_robot.pipelines.data_processing.nodes import nodes_load_data, nodes_inzener_features, nodes_select_features 
 
 
-def create_pipeline(**kwargs) -> Pipeline:
+def create_training_and_selection_pipeline(**kwargs) -> Pipeline:
     return pipeline(
         [
             node(
@@ -22,12 +22,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs="features",
                 outputs="selected_features",
                 name="select_features_node",
-            ),
-            node(
-                func=nodes_train_test_split,
-                inputs="selected_features",
-                outputs=["X_train", "y_train", "X_test", "y_test"],
-                name="train_test_split_node",
             ),
         ]
     )
