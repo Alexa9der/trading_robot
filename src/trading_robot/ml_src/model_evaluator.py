@@ -166,60 +166,66 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         
         return grid_search
     
-    def tune_and_log_models(self, X: pd.DataFrame, y: pd.Series, 
+    def tune_and_log_models(self, X: pd.DataFrame, y: pd.Series,
+                            X_test: pd.DataFrame, y_test: pd.Series, 
                             models : None | Dict[str, BaseEstimator] = None, 
                             param_grids : None | Dict[str, Dict[str, List[Union[float, int, str]]]] = None, 
                             cv=5, mlflow_log_metrics : bool = True, deploy=True):
         """
-        Tunes multiple models by selecting the best hyperparameters, logs the models and their metrics to MLflow, 
-        and optionally deploys the best model.
+            Tunes hyperparameters for multiple models, logs them and their metrics to MLflow, 
+            and optionally deploys the best model.
 
-        Parameters:
-        ----------
-        X : pd.DataFrame
-            DataFrame containing the features used for training the models.
-        y : pd.Series
-            Series containing the target variable for training the models.
-        models : dict, optional
-            A dictionary where keys are model names and values are instances of the models (e.g., {'ridge': Ridge(), 'lasso': Lasso()}).
-            Default is None, which will use predefined models.
-        param_grids : dict, optional
-            A dictionary where keys are model names and values are parameter grids for those models. 
-            Each parameter grid is a dictionary where the keys are parameter names and the values are lists of parameter values to try.
-            Default is None, which will use predefined parameter grids.
-        cv : int, optional
-            The number of folds for cross-validation. Default is 5.
-        deploy : bool, optional
-            Whether to deploy the best model after hyperparameter tuning and model selection. Default is True.
-        mlflow_log_metrics : bool, optional
-            If True, logs additional metrics and model parameters to MLflow for tracking. Default is True.
+            Parameters:
+            ----------
+            X : pd.DataFrame
+                DataFrame containing the features used for training the models.
+            y : pd.Series
+                Series containing the target variable for training the models.
+            X_test : pd.DataFrame
+                DataFrame containing the features used for testing the models.
+            y_test : pd.Series
+                Series containing the target variable for testing the models.
+            models : dict, optional
+                A dictionary where keys are model names and values are instances of the models 
+                (e.g., {'ridge': Ridge(), 'lasso': Lasso()}). Default is None, which will use predefined models.
+            param_grids : dict, optional
+                A dictionary where keys are model names and values are parameter grids for those models. 
+                Each parameter grid is a dictionary where the keys are parameter names and the values are lists of parameter values to try. 
+                Default is None, which will use predefined parameter grids.
+            cv : int, optional
+                The number of folds for cross-validation. Default is 5.
+            mlflow_log_metrics : bool, optional
+                If True, logs additional metrics and model parameters to MLflow for tracking. Default is True.
+            deploy : bool, optional
+                If True, the best model is automatically deployed after hyperparameter tuning and model selection. 
+                Default is True.
 
-        Returns:
-        -------
-        dict
-            A dictionary where keys are model names and values are dictionaries containing the RMSE values 
-            ('rmse' key) for the corresponding models.
+            Returns:
+            -------
+            dict
+                A dictionary where keys are model names and values are dictionaries containing the RMSE values 
+                ('rmse' key) for the corresponding models.
 
-        Notes:
-        ------
-        - This function iterates over the provided models, applies grid search with time series cross-validation, 
-        and logs the best model for each algorithm to MLflow.
-        - The best model across all candidates, based on RMSE, can be automatically deployed if `deploy` is set to True.
-        - The function also handles data preprocessing, including scaling of features, to ensure consistency 
-        during the model training and evaluation processes.
-        - The example input data is captured from the last row of the scaled features, which is used in the model registration process.
+            Notes:
+            ------
+            - This method iterates over the provided models, applies Grid Search with TimeSeriesSplit for cross-validation, 
+            and logs the best model for each algorithm to MLflow.
+            - The best model across all candidates, based on RMSE, can be automatically deployed if `deploy` is set to True.
+            - The method also handles data preprocessing, including scaling of features, to ensure consistency 
+            during the model training and evaluation processes.
+            - The example input data is captured from the last row of the scaled features, which is used in the model registration process.
 
-        Example:
-        --------
-        >>> from sklearn.linear_model import Ridge, Lasso
-        >>> model_dict = {'ridge': Ridge(), 'lasso': Lasso()}
-        >>> param_grid_dict = {
-        >>>     'ridge': {'alpha': [0.1, 1.0, 10.0]},
-        >>>     'lasso': {'alpha': [0.001, 0.01, 0.1]}
-        >>> }
-        >>> results = tune_and_log_models(X, y, models=model_dict, param_grids=param_grid_dict, cv=5, deploy=True)
-        >>> print(results)
-        """
+            Example:
+            --------
+            >>> from sklearn.linear_model import Ridge, Lasso
+            >>> model_dict = {'ridge': Ridge(), 'lasso': Lasso()}
+            >>> param_grid_dict = {
+            >>>     'ridge': {'alpha': [0.1, 1.0, 10.0]},
+            >>>     'lasso': {'alpha': [0.001, 0.01, 0.1]}
+            >>> }
+            >>> results = tune_and_log_models(X_train, y_train, X_test, y_test, models=model_dict, param_grids=param_grid_dict, cv=5, deploy=True)
+            >>> print(results)
+            """
         if models is None:
             models = self.__model()
 
@@ -243,8 +249,10 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
                     log_message(f"Starting grid search with TimeSeriesSplit for model '{model_name}'.")
 
+                    # Get the parameter grid for the current model
                     param_grid = param_grids.get(model_name, {})
 
+                    # Grid Search with TimeSeriesSplit
                     grid_search = self.timeseries_grid_search(
                         model=candidate_model,
                         param_grid=param_grid,
@@ -253,14 +261,24 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                         cv=cv,
                     )
 
+                    # Best model after Grid Search
                     best_model = grid_search.best_estimator_
-                    best_rmse = grid_search.best_score_
 
-                    results[model_name] = {'rmse': best_rmse}
+                    # Scale test data similarly to training data
+                    X_test = pd.DataFrame(self.scaler.fit_transform(X_test), columns=X_test.columns)
+                    
+                    # Predict on test data
+                    predict = best_model.predict(X_test)  
+
+                    # Calculate RMSE for predictions on test data
+                    rmse = self.rmse(y_test, predict)
+
+                    # Store RMSE results for the current model
+                    results[model_name] = {'rmse': rmse}
 
                     # Select the model with the lowest RMSE
-                    if best_rmse < selected_model_rmse:
-                        selected_model_rmse = best_rmse
+                    if rmse < selected_model_rmse:
+                        selected_model_rmse = rmse
                         selected_model = best_model
                         selected_model_name = model_name
                         active_run = mlflow.active_run()
@@ -269,7 +287,7 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                     # Log additional metrics and data
                     if mlflow_log_metrics:
                         log_message(f"Logging additional metrics to MLflow.")
-                        self._log_additional_metrics(grid_search, X, y, model_name, self.scaler)
+                        self._log_additional_metrics(grid_search, X_test, y_test, model_name, self.scaler)
 
             # Register and deploy the best model if required
             if deploy and selected_model is not None:
@@ -453,41 +471,65 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         # Return the scaled data
         return X_scaled
 
+
+
+
 if __name__ == "__main__":
 
+    # Create an instance of the DataCollector class
     data_col = DataCollector()
+
+    # Fetch historical data for the EURUSD symbol
     data = data_col.get_historical_data(symbol="EURUSD")
 
-    tsem = TimeSeriesModelEvaluator()
+    # Define split point (e.g., 80% of the data for training and 20% for testing)
+    split_index = int(len(data) * 0.8)  # Calculate the index to split the data
 
-    X = data.drop(columns="Close")
-    y = data["Close"]
+    # Split the data into training and testing sets
+    train = data.iloc[:split_index]  
+    test = data.iloc[split_index:]   
 
+    # Separate features (X) and target variable (y) from the dataset
+    X_train = train.drop(columns="Close")
+    y_train = train["Close"]               
+
+    X_test = test.drop(columns="Close")
+    y_test = test["Close"]               
+
+    # Define a dictionary of models to be tuned
     models = {
-        'decision_tree': DecisionTreeRegressor(random_state=42),
-        'ridge': Ridge(random_state=42),
-        'lasso': Lasso(random_state=42),
+        'decision_tree': DecisionTreeRegressor(random_state=42),  
+        'ridge': Ridge(random_state=42),                          
+        'lasso': Lasso(random_state=42),                          
     }
 
+    # Define a dictionary of hyperparameter grids for each model
     params = {
         'ridge': {
-            'alpha': [0.1, 1.0, 10.0, 100.0]
+            'alpha': [0.1, 1.0, 10.0, 100.0]  
         },
         'lasso': {
-            'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0],
-            'max_iter': [10000, 15000, 20000]
+            'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0],  
+            'max_iter': [10000, 15000, 20000]                
         },
         'decision_tree': {
-            'max_depth': [None, 10, 20, 30, 50],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_features': ['auto', 'sqrt', 'log2']
+            'max_depth': [None, 10, 20, 30, 50],               
+            'min_samples_split': [2, 5, 10],                   
+            'min_samples_leaf': [1, 2, 4],                     
+            'max_features': ['auto', 'sqrt', 'log2']           
         }
     }
 
-    results = tsem.tune_and_log_models(X, y, models=models, param_grids=params, 
-                                       deploy= True, mlflow_log_metrics = True)
-    print(results)
+    # Create an instance of TimeSeriesModelEvaluator to handle model evaluation and tuning
+    tsem = TimeSeriesModelEvaluator()
 
+    # Tune models, log results to MLflow, and deploy the best model if needed
+    results = tsem.tune_and_log_models(X=X_train, y=y_train,
+                                       X_test=X_test, y_test=y_test, 
+                                       models=models, param_grids=params, 
+                                       deploy=True, mlflow_log_metrics=True)
+
+
+    print(results)
 
 
