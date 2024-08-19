@@ -332,10 +332,9 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         """
         models = {
             'linear': LinearRegression(n_jobs=-1),
-            'ridge': Ridge(random_state=42),
-            'lasso': Lasso(random_state=42),
+            'ridge': Ridge(random_state=42, max_iter=15000),
+            'lasso': Lasso(random_state=42, max_iter=15000),
             'svr': SVR(),
-            'decision_tree': DecisionTreeRegressor(random_state=42),
             'random_forest': RandomForestRegressor(n_jobs=-1, random_state=42),
             'gbr': GradientBoostingRegressor(random_state=42),
             'knn': KNeighborsRegressor(n_jobs=-1),
@@ -359,11 +358,40 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         params = {
             'ridge': {
-                'alpha': [0.1, 1.0, 10.0, 100.0]
+                'alpha': [0.1, 1.0, 10.0, 100.0],
+                'fit_intercept': [True, False]
             },
             'lasso': {
                 'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0],
-                'max_iter': [1000, 5000, 10000, 15000]
+                'fit_intercept': [True, False]
+            },
+            'random_forest': {
+                'n_estimators': range(100, 1100, 100), 
+                'max_depth': range(1, 6), 
+                'min_samples_split': range(2, 12, 2), 
+                'min_samples_leaf': range(2, 8, 2),
+                'max_features': ['auto', 'sqrt', 'log2'],
+                'bootstrap': [True, False]
+            },
+            'gbr': {
+                'n_estimators': range(100, 1100, 100),
+                'max_depth': range(1, 6),
+                'subsample': np.arange(0.5, 1.1, 0.1),
+                'min_samples_split': range(2, 8, 2),
+                'min_samples_leaf': range(2, 8, 2),
+                'learning_rate': np.arange(0.1, 1.1, 0.1),
+                'max_features': ['auto', 'sqrt', 'log2'],
+                'bootstrap': [True, False],
+                'loss': ['ls', 'lad', 'huber', 'quantile']
+            },
+            'knn': {
+                'n_neighbors': range(2, 17, 2),
+                'weights': ['uniform', 'distance'],
+                'p': [1, 2]  # 1: Manhattan, 2: Euclidean
+            },
+            'polynomial': {
+                'poly__degree': range(2, 8, 2),  
+                'linear__fit_intercept': [True, False]
             },
             'svr': {
                 'C': [0.1, 1, 10, 100],
@@ -371,37 +399,6 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                 'gamma': ['scale', 'auto'],
                 'epsilon': [0.001, 0.01, 0.1, 1]
             },
-            'decision_tree': {
-                'max_depth': [None, 10, 20, 30, 50],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
-                'max_features': ['auto', 'sqrt', 'log2']
-            },
-            'random_forest': {
-                'n_estimators': [50, 100, 200],
-                'max_depth': [None, 10, 20, 30, 50],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
-                'max_features': ['auto', 'sqrt', 'log2']
-            },
-            'gbr': {
-                'n_estimators': [50, 100, 200],
-                'learning_rate': [0.01, 0.05, 0.1, 0.2],
-                'max_depth': [3, 4, 5, 7],
-                'subsample': [0.8, 0.9, 1.0],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4]
-            },
-            'knn': {
-                'n_neighbors': [3, 5, 7, 10, 15],
-                'weights': ['uniform', 'distance'],
-                'p': [1, 2]  # 1: Manhattan, 2: Euclidean
-            },
-            'polynomial': {
-                'poly__degree': [2, 3, 4],
-                'linear__fit_intercept': [True, False],
-                'linear__normalize': [True, False]
-            }
         }
 
         return params
