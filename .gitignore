@@ -207,3 +207,9 @@ mlruns/
 session_store.db
 .viz/
 
+# Ignore catboost files and folders
+catboost_info/
+
+# Ignore XGBoost files and folders
+xgboost_info/
+*.model

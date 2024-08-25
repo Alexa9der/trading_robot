@@ -60,8 +60,8 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
     """
 
     __models = {
-        'catboost': CatBoostRegressor(random_state=42, silent=True),
         'xgboost': XGBRegressor(random_state=42),
+        'catboost': CatBoostRegressor(random_state=42, silent=True),
         'random_forest': RandomForestRegressor(n_jobs=-1, random_state=42),
         'gbr': GradientBoostingRegressor(random_state=42),
         'svr': SVR(),

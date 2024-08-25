@@ -3,9 +3,13 @@ import pandas as pd
 from datetime import datetime
 
 import mlflow
+import mlflow.catboost
+import mlflow.xgboost
 from mlflow.exceptions import MlflowException
 
-import sklearn
+from catboost import CatBoostRegressor
+from xgboost import XGBRegressor
+
 from sklearn.base import BaseEstimator
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.metrics import  mean_absolute_error, mean_squared_error, r2_score
@@ -48,7 +52,8 @@ class ModelDeploymentManager:
             model_uri = f"runs:/{run_id}/model"
 
             # Log the model as an artifact
-            mlflow.sklearn.log_model(best_model, "model", input_example=example_input)
+            self.__log_model(best_model, model_name, input_example=example_input)
+
             log_message(f"Model logged to {model_uri}")
 
             # Log scaler parameters as an artifact
@@ -188,6 +193,27 @@ class ModelDeploymentManager:
 
         return scaler_param
 
+    def __log_model(self, model, model_name, input_example=None):
+        """
+        Логирует модель в MLflow в зависимости от типа модели.
+
+        :param model: Объект модели для логирования.
+        :param model_name: Название модели в MLflow.
+        :param input_example: Пример входных данных для логирования модели (необязательно).
+        """
+        with mlflow.start_run() as run:
+            if isinstance(model, CatBoostRegressor):
+                mlflow.catboost.log_model(model, model_name, input_example=input_example)
+                print(f"CatBoost model saved in run {run.info.run_id}")
+
+            elif isinstance(model, XGBRegressor):
+                mlflow.xgboost.log_model(model, model_name, input_example=input_example)
+                print(f"XGBoost model saved in run {run.info.run_id}")
+
+            elif hasattr(model, 'predict'):
+                # Предполагаем, что это модель scikit-learn
+                mlflow.sklearn.log_model(model, model_name, input_example=input_example)
+                print(f"Scikit-learn model saved in run {run.info.run_id}")
 
 
 if __name__ == "__main__":
