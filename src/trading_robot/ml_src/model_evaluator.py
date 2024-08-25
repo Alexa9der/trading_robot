@@ -17,7 +17,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.base import BaseEstimator
 
-from sklearn.metrics import make_scorer, mean_squared_error
+from sklearn.metrics import make_scorer
+
+from catboost import CatBoostRegressor
+from xgboost import XGBRegressor
 
 from trading_robot.data_collection.data_collector import DataCollector
 from trading_robot.utils.logger import log_message
@@ -55,6 +58,87 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         Calculates Root Mean Squared Error (RMSE).
 
     """
+
+    __models = {
+        'catboost': CatBoostRegressor(random_state=42, silent=True),
+        'xgboost': XGBRegressor(random_state=42),
+        'random_forest': RandomForestRegressor(n_jobs=-1, random_state=42),
+        'gbr': GradientBoostingRegressor(random_state=42),
+        'svr': SVR(),
+        'polynomial': Pipeline([
+            ('poly', PolynomialFeatures()),
+            ('linear', LinearRegression(n_jobs=-1))
+        ]),
+        'linear': LinearRegression(n_jobs=-1),
+        'ridge': Ridge(random_state=42, max_iter=15000),
+        'lasso': Lasso(random_state=42, max_iter=15000),
+        'knn': KNeighborsRegressor(n_jobs=-1),
+        
+    }
+
+    __params = {
+                'catboost': {
+                    'depth': range(4, 11),  
+                    'learning_rate': np.arange(0.01, 0.1, 0.01),
+                    'iterations': range(100, 1100, 100),
+                    'l2_leaf_reg': np.arange(1, 10, 2),
+                    'border_count': range(32, 129, 32)
+                },
+                'xgboost': {
+                    'n_estimators': range(100, 1100, 100),
+                    'max_depth': range(3, 10, 2),
+                    'learning_rate': np.arange(0.01, 0.1, 0.01),
+                    'subsample': np.arange(0.5, 1.1, 0.1),
+                    'colsample_bytree': np.arange(0.5, 1.1, 0.1),
+                    'gamma': [0, 0.1, 0.2, 0.3],
+                    'reg_alpha': [0, 0.01, 0.1, 1],
+                    'reg_lambda': [1, 0.1, 0.01, 0]
+                },
+                'random_forest': {
+                    'n_estimators': range(100, 1100, 100), 
+                    'max_depth': range(1, 16, 2), 
+                    'min_samples_split': range(2, 12, 2), 
+                    'min_samples_leaf': range(2, 8, 2),
+                    'max_features': ['auto', 'sqrt', 'log2'],
+                    'bootstrap': [True, False]
+                },
+                'gbr': {
+                    'n_estimators': range(100, 1100, 100),
+                    'max_depth': range(1, 11, 2),
+                    'subsample': np.arange(0.5, 1.1, 0.1),
+                    'min_samples_split': range(2, 8, 2),
+                    'min_samples_leaf': range(2, 8, 2),
+                    'learning_rate': np.arange(0.1, 1.1, 0.1),
+                    'max_features': ['auto', 'sqrt', 'log2'],
+                    "criterion": ["friedman_mse", "mse", "mae"],
+                    'loss': ['ls', 'lad', 'huber', 'quantile']
+                },
+                'svr': {
+                    'C': [0.01, 0.1, 1, 10, 100, 1000],
+                    'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
+                    'gamma': ['scale', 'auto'],
+                    'epsilon': [0.001, 0.01, 0.1, 1]
+                },
+                'polynomial': {
+                    'poly__degree': range(2, 8, 2),  
+                    'linear__fit_intercept': [True, False],
+                    "poly__interaction_only": [True, False]
+                },
+                'ridge': {
+                    'alpha': [0.1, 1.0, 10.0, 100.0],
+                    "solver": ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"],
+                    'fit_intercept': [True, False]
+                },
+                'lasso': {
+                    'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0],
+                    'fit_intercept': [True, False]
+                },
+                'knn': {
+                    'n_neighbors': range(2, 17, 2),
+                    'weights': ['uniform', 'distance'],
+                    'p': [1, 2]  # 1: Manhattan, 2: Euclidean
+                },
+            }
 
     def __init__(self, scaler = None):
         """
@@ -227,10 +311,10 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
             >>> print(results)
             """
         if models is None:
-            models = self.__model()
+            models = self.__models
 
         if param_grids is None:
-            param_grids = self.__param()
+            param_grids = self.__params
 
         X = self.__transform(X)
 
@@ -302,106 +386,6 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         log_message("Model tuning and logging complete")
         return results
-
-    def rmse(self, y_true: pd.Series, y_pred: pd.Series):
-        """
-        Calculates Root Mean Squared Error (RMSE) between true and predicted values.
-
-        Parameters:
-        ----------
-        y_true : pd.Series
-            Series containing true values.
-        y_pred : pd.Series
-            Series containing predicted values.
-
-        Returns:
-        -------
-        float
-            The RMSE value.
-        """
-        return np.sqrt(mean_squared_error(y_true, y_pred))
-
-    def __model(self):
-        """
-        Provides a dictionary of models available for evaluation.
-
-        Returns:
-        -------
-        dict
-            Dictionary of model names and their instances.
-        """
-        models = {
-            'linear': LinearRegression(n_jobs=-1),
-            'ridge': Ridge(random_state=42, max_iter=15000),
-            'lasso': Lasso(random_state=42, max_iter=15000),
-            'svr': SVR(),
-            'random_forest': RandomForestRegressor(n_jobs=-1, random_state=42),
-            'gbr': GradientBoostingRegressor(random_state=42),
-            'knn': KNeighborsRegressor(n_jobs=-1),
-            'polynomial': Pipeline([
-                ('poly', PolynomialFeatures()),
-                ('linear', LinearRegression(n_jobs=-1))
-            ])
-        }
-
-        return models 
-    
-    def __param(self):
-        """
-        Provides a dictionary of parameter grids for hyperparameter tuning.
-
-        Returns:
-        -------
-        dict
-            Dictionary of parameter grids for each model.
-        """
-
-        params = {
-            'ridge': {
-                'alpha': [0.1, 1.0, 10.0, 100.0],
-                'fit_intercept': [True, False]
-            },
-            'lasso': {
-                'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0],
-                'fit_intercept': [True, False]
-            },
-            'random_forest': {
-                'n_estimators': range(100, 1100, 100), 
-                'max_depth': range(1, 6), 
-                'min_samples_split': range(2, 12, 2), 
-                'min_samples_leaf': range(2, 8, 2),
-                'max_features': ['auto', 'sqrt', 'log2'],
-                'bootstrap': [True, False]
-            },
-            'gbr': {
-                'n_estimators': range(100, 1100, 100),
-                'max_depth': range(1, 6),
-                'subsample': np.arange(0.5, 1.1, 0.1),
-                'min_samples_split': range(2, 8, 2),
-                'min_samples_leaf': range(2, 8, 2),
-                'learning_rate': np.arange(0.1, 1.1, 0.1),
-                'max_features': ['auto', 'sqrt', 'log2'],
-                'bootstrap': [True, False],
-                'loss': ['ls', 'lad', 'huber', 'quantile']
-            },
-            'knn': {
-                'n_neighbors': range(2, 17, 2),
-                'weights': ['uniform', 'distance'],
-                'p': [1, 2]  # 1: Manhattan, 2: Euclidean
-            },
-            'polynomial': {
-                'poly__degree': range(2, 8, 2),  
-                'linear__fit_intercept': [True, False]
-            },
-            'svr': {
-                'C': [0.1, 1, 10, 100],
-                'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
-                'gamma': ['scale', 'auto'],
-                'epsilon': [0.001, 0.01, 0.1, 1]
-            },
-        }
-
-        return params
 
     def __is_fitted(self, transformer: BaseEstimator):
         """
@@ -521,10 +505,14 @@ if __name__ == "__main__":
     tsem = TimeSeriesModelEvaluator()
 
     # Tune models, log results to MLflow, and deploy the best model if needed
-    results = tsem.tune_and_log_models(X=X_train, y=y_train,
-                                       X_test=X_test, y_test=y_test, 
-                                       models=models, param_grids=params, 
-                                       deploy=True, mlflow_log_metrics=True)
+    results = tsem.tune_and_log_models(X=X_train, 
+                                       y=y_train,
+                                       X_test=X_test, 
+                                       y_test=y_test, 
+                                    #    models=models, 
+                                    #    param_grids=params, 
+                                       deploy=True, 
+                                       mlflow_log_metrics=True)
 
 
     print(results)

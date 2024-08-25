@@ -8,14 +8,15 @@ from mlflow.exceptions import MlflowException
 import sklearn
 from sklearn.base import BaseEstimator
 from sklearn.discriminant_analysis import StandardScaler
-from sklearn.metrics import  mean_absolute_error, r2_score
+from sklearn.metrics import  mean_absolute_error, mean_squared_error, r2_score
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 
 from trading_robot.data_collection.data_collector import DataCollector
 from trading_robot.utils.logger import log_message
 
-
+import logging
+logging.getLogger("mlflow").setLevel(logging.DEBUG)
 
 class ModelDeploymentManager:
     """
@@ -51,12 +52,11 @@ class ModelDeploymentManager:
             log_message(f"Model logged to {model_uri}")
 
             # Log scaler parameters as an artifact
-            scaler_params = {
-                'mean': scaler.mean_.tolist(),
-                'scale': scaler.scale_.tolist()
-            }
-            mlflow.log_dict(scaler_params, "scaler_params.json")
-            log_message(f"Scaler parameters logged as 'scaler_params.json'")
+            # Log scaler parameters
+            scaler_param = self.scaler_param(scaler=scaler)
+            if scaler_param:
+                mlflow.log_dict(scaler_param, "scaler_param.json")
+            log_message(f"Scaler parameters logged as 'scaler_param.json'")
 
             # Try to create a registered model
             try:
@@ -74,6 +74,7 @@ class ModelDeploymentManager:
                 run_id=run_id,
                 description="Best model found during hyperparameter tuning"
             )
+
             model_version = model_version_info.version
             log_message(f"Model version {model_version} created for '{model_name}'.")
 
@@ -108,58 +109,84 @@ class ModelDeploymentManager:
             # Logging an example of the model's results
             prediction_df = pd.DataFrame({'y_true': y, 'y_pred': predictions})
             prediction_df.index = prediction_df.index.astype(str)
-            mlflow.log_dict(prediction_df.head(10).to_dict(), "sample_predictions.json")
+            mlflow.log_dict(prediction_df.head(5).to_dict(), "sample_predictions.json")
 
             # log metric
             r2 = r2_score(y, predictions)
             mae = mean_absolute_error(y, predictions)
+            rmse = self.rmse(y, predictions)
 
             mlflow.log_metric("R2", r2)
             mlflow.log_metric("MAE", mae)
-            mlflow.log_metric("rmse", grid_search.best_score_)
+            mlflow.log_metric("rmse", rmse)
 
             # Log model
             example_input = X.tail(1).to_dict(orient='records')[0]
             mlflow.sklearn.log_model(best_model, "model", input_example=example_input)
+
+             # Log model parameters
             mlflow.log_params(best_params)
 
-            # Log all cross-validation results
-            results_df = pd.DataFrame(grid_search.cv_results_)
-            mlflow.log_dict(results_df.to_dict(), "cv_results.json")
-
-            # # Log feature importances
-            # if hasattr(best_model, 'feature_importances_'):
-            #     feature_importances = best_model.feature_importances_
-            #     importance_dict = dict(zip(X.columns, feature_importances))
-            #     mlflow.log_dict(importance_dict, "feature_importances.json")
-
-            #     plt.figure(figsize=(10, 6))
-            #     plt.barh(X.columns, feature_importances)
-            #     plt.xlabel("Feature Importance")
-            #     plt.title(f"Feature Importance for {model_name}")
-            #     plt.savefig("feature_importances.png")
-            #     mlflow.log_artifact("feature_importances.png")
-            #     plt.close()
-
             # Log scaler parameters
-            if hasattr(scaler, 'mean_') and hasattr(self.scaler, 'scale_'):
-                mlflow.log_dict({
-                    'mean': scaler.mean_.tolist(),
-                    'scale': scaler.scale_.tolist()
-                }, "scaler_params.json")
+            scaler_param = self.__scaler_params(scaler=scaler)
+            if scaler_param:
+                mlflow.log_dict(scaler_param, "scaler_param.json")
 
             # Log dataset metadata
             mlflow.log_param("n_samples", X.shape[0])
             mlflow.log_param("n_features", X.shape[1])
             mlflow.log_param("last_data_update", datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 
-            # Log library versions
-            mlflow.log_param("pandas_version", pd.__version__)
-            mlflow.log_param("sklearn_version", sklearn.__version__)
+            # # Log library versions
+            # mlflow.log_param("pandas_version", pd.__version__)
+            # mlflow.log_param("sklearn_version", sklearn.__version__)
 
         except Exception as e:
             print(f"Error logging additional metrics and data: {str(e)}")
             raise
+
+    def rmse(self, y_true: pd.Series, y_pred: pd.Series):
+        """
+        Calculates Root Mean Squared Error (RMSE) between true and predicted values.
+
+        Parameters:
+        ----------
+        y_true : pd.Series
+            Series containing true values.
+        y_pred : pd.Series
+            Series containing predicted values.
+
+        Returns:
+        -------
+        float
+            The RMSE value.
+        """
+        return np.sqrt(mean_squared_error(y_true, y_pred))
+
+    def __scaler_params(self, scaler):
+
+        scaler_param = {}
+
+        if hasattr(scaler, 'mean_'):
+            scaler_param['mean'] = scaler.mean_.tolist()
+        if hasattr(scaler, 'scale_'):
+            scaler_param['scale'] = scaler.scale_.tolist()
+        if hasattr(scaler, 'var_'):
+            scaler_param['var'] = scaler.var_.tolist()
+        if hasattr(scaler, 'min_'):
+            scaler_param['min'] = scaler.min_.tolist()
+        if hasattr(scaler, 'data_min_'):
+            scaler_param['data_min'] = scaler.data_min_.tolist()
+        if hasattr(scaler, 'data_max_'):
+            scaler_param['data_max'] = scaler.data_max_.tolist()
+        if hasattr(scaler, 'center_'):
+            scaler_param['center'] = scaler.center_.tolist()
+        if hasattr(scaler, 'scale_'):
+            scaler_param['scale'] = scaler.scale_.tolist()
+        if hasattr(scaler, 'quantiles_'):
+            scaler_param['quantiles'] = scaler.quantiles_.tolist()
+
+        return scaler_param
 
 
 
