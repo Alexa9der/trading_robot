@@ -1,16 +1,15 @@
 import pandas as pd 
 import numpy as np
 from datetime import datetime
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 
 import mlflow
 import mlflow.sklearn
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import TimeSeriesSplit, GridSearchCV
+from sklearn.model_selection import TimeSeriesSplit, GridSearchCV, RandomizedSearchCV
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.svm import SVR
-from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
@@ -60,19 +59,19 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
     """
 
     __models = {
+        'random_forest': RandomForestRegressor(random_state=42),
+        'gbr': GradientBoostingRegressor(random_state=42),
         'xgboost': XGBRegressor(random_state=42),
         'catboost': CatBoostRegressor(random_state=42, silent=True),
-        'random_forest': RandomForestRegressor(n_jobs=-1, random_state=42),
-        'gbr': GradientBoostingRegressor(random_state=42),
         'svr': SVR(),
         'polynomial': Pipeline([
             ('poly', PolynomialFeatures()),
-            ('linear', LinearRegression(n_jobs=-1))
+            ('linear', LinearRegression())
         ]),
-        'linear': LinearRegression(n_jobs=-1),
+        'linear': LinearRegression(),
         'ridge': Ridge(random_state=42, max_iter=15000),
         'lasso': Lasso(random_state=42, max_iter=15000),
-        'knn': KNeighborsRegressor(n_jobs=-1),
+        'knn': KNeighborsRegressor(),
         
     }
 
@@ -193,39 +192,46 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         return mean_error
 
-    def timeseries_grid_search(self, model : BaseEstimator, 
-                               param_grid : Dict[str, List[Union[float, int, str]]],
-                               X: pd.DataFrame, y: pd.Series, cv: int = 5):
+    def timeseries_param_search(self, model: BaseEstimator, 
+                                param_grid: Dict[str, List[Union[float, int, str]]],
+                                X: pd.DataFrame, y: pd.Series, search_model: str = "random", 
+                                cv: int = 5, n_iter: int = 10, random_state: int = 42,
+                                n_jobs=None):
         """
-        Searches for the best hyperparameters for the model using GridSearchCV with time series cross-validation.
+        Searches for the best hyperparameters for the model using GridSearchCV or RandomizedSearchCV with time series cross-validation.
 
         Parameters:
         ----------
+        search_model : str, optional
+            The type of hyperparameter search: "grid" for exhaustive search (GridSearchCV) or "random" for randomized search (RandomizedSearchCV).
+            Defaults to "random".
         model : BaseEstimator
-            A model instance for learning (e.g., RandomForestRegressor).
+            A model instance for training (e.g., RandomForestRegressor).
         param_grid : Dict[str, List[Union[float, int, str]]]
             Dictionary with parameters to search through, where the keys are the parameter names and 
             the values are lists of parameter settings to try.
         X : pd.DataFrame
-            DataFrame containing features for training the model.
+            DataFrame containing the features for training the model.
         y : pd.Series
             Series containing the target variable for training the model.
         cv : int, optional
-            The number of folds for time series cross-validation. Default is 5.
+            The number of folds for time series cross-validation (TimeSeriesSplit). Defaults to 5.
+        n_iter : int, optional
+            Number of iterations for randomized search. Only used when search_model="random". Defaults to 10.
+        random_state : int, optional
+            Seed for the random number generator. Defaults to None.
+
         Returns:
         -------
-        GridSearchCV
-            The GridSearchCV object containing the best model parameters and scores, along with other 
-            details about the cross-validation process.
+        param_search : GridSearchCV or RandomizedSearchCV
+            The search object containing the best model parameters, scores, and other details about the cross-validation process.
 
         Notes:
         ------
-        - The function uses TimeSeriesSplit for cross-validation, which is suitable for time series data
-        where the order of observations is important.
+        - TimeSeriesSplit is used for cross-validation, which is suitable for time series data where the order of observations is important.
         - A custom RMSE (Root Mean Square Error) scorer is used to evaluate the models.
-        - If mlflow_log_metrics is set to True, additional metrics and details are logged to MLflow 
-        to help track the performance of the model with the chosen parameters.
-        
+        - If `mlflow_log_metrics` is set to True, additional metrics and details are logged to MLflow to track the model's performance with the selected parameters.
+
         Example:
         --------
         >>> model = RandomForestRegressor()
@@ -233,28 +239,47 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         >>>     'n_estimators': [100, 200],
         >>>     'max_depth': [10, 20, None],
         >>> }
-        >>> grid_search_result = timeseries_grid_search(model, param_grid, X, y, cv=5)
+        >>> grid_search_result = timeseries_param_search(search_model="grid", model=model, param_grid=param_grid, X=X, y=y, cv=5)
         >>> print(grid_search_result.best_params_)
         """
         
+        # Custom scorer based on RMSE
         scorer = make_scorer(self.rmse)
 
-        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, 
-                                   cv=TimeSeriesSplit(n_splits=cv), 
-                                   scoring=scorer, n_jobs=-1)
-
-        grid_search.fit(X, y)
-
-        log_message(f"Best parameters found: {grid_search.best_params_}")
-        log_message(f"Best score achieved: {grid_search.best_score_}")
+        # GridSearchCV for exhaustive parameter search
+        if search_model == "grid":
+            param_search = GridSearchCV(estimator=model, param_grid=param_grid, 
+                                        cv=TimeSeriesSplit(n_splits=cv), 
+                                        scoring=scorer, random_state=random_state,
+                                        n_jobs=n_jobs)
         
-        return grid_search
+        # RandomizedSearchCV for randomized parameter search
+        elif search_model == "random":
+            param_search = RandomizedSearchCV(estimator=model, param_distributions=param_grid, 
+                                            n_iter=n_iter, cv=TimeSeriesSplit(n_splits=cv), 
+                                            scoring=scorer, random_state=random_state,
+                                            n_jobs=n_jobs)
+            
+        # Raise error if an unsupported search_model is provided
+        else:
+            raise KeyError("Unknown search model: use 'grid' or 'random'")
+
+        # Fit the model to the data
+        param_search.fit(X, y)
+
+        # Log the best parameters and score
+        log_message(f"Best parameters found: {param_search.best_params_}")
+        log_message(f"Best score achieved: {param_search.best_score_}")
+        
+        return param_search
     
     def tune_and_log_models(self, X: pd.DataFrame, y: pd.Series,
                             X_test: pd.DataFrame, y_test: pd.Series, 
                             models : None | Dict[str, BaseEstimator] = None, 
                             param_grids : None | Dict[str, Dict[str, List[Union[float, int, str]]]] = None, 
-                            cv=5, mlflow_log_metrics : bool = True, deploy=True):
+                            cv=5, search_model: str = "random", random_state: int = 42,
+                            n_iter: int = 10, n_jobs=None,
+                            mlflow_log_metrics : bool = True, deploy=True):
         """
             Tunes hyperparameters for multiple models, logs them and their metrics to MLflow, 
             and optionally deploys the best model.
@@ -269,6 +294,9 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                 DataFrame containing the features used for testing the models.
             y_test : pd.Series
                 Series containing the target variable for testing the models.
+            search_model : str, optional
+                    Type of hyperparameter search: "grid" for exhaustive search (GridSearchCV) or 
+                    "random" for random search (RandomizedSearchCV). Default is "random".
             models : dict, optional
                 A dictionary where keys are model names and values are instances of the models 
                 (e.g., {'ridge': Ridge(), 'lasso': Lasso()}). Default is None, which will use predefined models.
@@ -278,6 +306,13 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                 Default is None, which will use predefined parameter grids.
             cv : int, optional
                 The number of folds for cross-validation. Default is 5.
+            n_iter : int, optional
+                    Number of iterations for random search. Used only if search_model="random". Default is 10.
+            random_state : int, optional
+                Seed for the random number generator. Default is None.
+            n_jobs : int, optional
+                Number of jobs to run in parallel. -1 means using all processors. Default is -1.
+
             mlflow_log_metrics : bool, optional
                 If True, logs additional metrics and model parameters to MLflow for tracking. Default is True.
             deploy : bool, optional
@@ -324,7 +359,7 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
         selected_model_name = None
         run_id = None
 
-        parent_run_name = f"Model_Tuning_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+        parent_run_name = f"Model_Tuning_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
         log_message(f"Starting model tuning with parent run name: {parent_run_name}")
 
         with mlflow.start_run(run_name=parent_run_name) as parent_run:
@@ -337,12 +372,16 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
                     param_grid = param_grids.get(model_name, {})
 
                     # Grid Search with TimeSeriesSplit
-                    grid_search = self.timeseries_grid_search(
+                    grid_search = self.timeseries_param_search(
                         model=candidate_model,
                         param_grid=param_grid,
                         X=X,
                         y=y,
                         cv=cv,
+                        random_state=random_state,
+                        n_iter=n_iter,
+                        search_model=search_model,
+                        n_jobs=n_jobs
                     )
 
                     # Best model after Grid Search
@@ -375,6 +414,7 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
             # Register and deploy the best model if required
             if deploy and selected_model is not None:
+                print("*" * 100)
                 example_input = X.tail(1).to_dict(orient='records')[0]
 
 
@@ -386,6 +426,72 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
         log_message("Model tuning and logging complete")
         return results
+
+    def select_top_n_models(self, X_train: pd.DataFrame, y_train: pd.Series,
+                            X_test: pd.DataFrame, y_test: pd.Series,
+                            models: Dict[str, BaseEstimator] = None, n_top: int = 3,
+                            return_names_only: bool = False) -> Union[Dict[str, Dict], List[str]]:
+        """
+        Trains and evaluates multiple models from the given dictionary and selects the top N models
+        based on their performance on the test data.
+
+        Parameters:
+        ----------
+        X_train : pd.DataFrame
+            DataFrame containing the features used for training the models.
+        y_train : pd.Series
+            Series containing the target variable for training the models.
+        X_test : pd.DataFrame
+            DataFrame containing the features used for testing the models.
+        y_test : pd.Series
+            Series containing the target variable for testing the models.
+        models : dict
+            A dictionary where keys are model names and values are instances of the models 
+            (e.g., {'ridge': Ridge(), 'lasso': Lasso()}).
+        n_top : int, optional
+            The number of top models to return. Default is 3.
+        return_names_only : bool, optional
+            If True, return only the list of model names. If False, return the dictionary with models and RMSE scores.
+
+        Returns:
+        -------
+        Union[Dict[str, Dict], List[str]]
+            If return_names_only is False, returns a dictionary where keys are model names and values are dictionaries containing 
+            the trained model and the RMSE score (e.g., {'ridge': {'model': Ridge(), 'rmse': 0.123}}).
+            If return_names_only is True, returns a list of model names (e.g., ['ridge', 'lasso']).
+        """
+        if models is None:
+            models = self.__models
+
+        # Dictionary to store model performance results
+        results = {}
+
+        # Iterate over each model in the provided dictionary
+        for model_name, model in models.items():
+            # Train the model on the training data
+            model.fit(X_train, y_train)
+            
+            # Predict the target values on the test data
+            y_pred = model.predict(X_test)
+            
+            # Calculate the RMSE for the model's predictions
+            rmse = self.rmse(y_test, y_pred)
+            
+            # Store the model and its RMSE score in the results dictionary
+            results[model_name] = {'model': model, 'rmse': rmse}
+
+        # Sort the models by their RMSE in ascending order (lower RMSE is better)
+        sorted_results = dict(sorted(results.items(), key=lambda item: item[1]['rmse']))
+
+        # Select the top N models
+        top_n_results = {k: sorted_results[k] for k in list(sorted_results)[:n_top]}
+        
+        # If return_names_only is True, return just the list of top N model names
+        if return_names_only:
+            return list(top_n_results.keys())
+        
+        # Otherwise, return the full results with models and their RMSE scores
+        return top_n_results
 
     def __is_fitted(self, transformer: BaseEstimator):
         """
@@ -454,9 +560,88 @@ class TimeSeriesModelEvaluator(ModelDeploymentManager):
 
 
 
+models = {
+    'random_forest': RandomForestRegressor(random_state=42),
+    'gbr': GradientBoostingRegressor(random_state=42),
+    'xgboost': XGBRegressor(random_state=42),
+    'catboost': CatBoostRegressor(random_state=42, silent=True),
+    'svr': SVR(),
+    'polynomial': Pipeline([
+    ('poly', PolynomialFeatures()),
+    ('linear', LinearRegression())
+    ]),
+    'linear': LinearRegression(),
+    'ridge': Ridge(random_state=42, max_iter=15000),
+    'lasso': Lasso(random_state=42, max_iter=15000),
+    'knn': KNeighborsRegressor(),
+}
 
-if __name__ == "__main__":
+params = {
+    'catboost': {
+        'depth': range(4, 11),  
+        'learning_rate': np.arange(0.01, 0.1, 0.01),
+        'iterations': range(100, 1100, 100),
+        'l2_leaf_reg': np.arange(1, 10, 2),
+        'border_count': range(32, 129, 32)
+    },
+    'xgboost': {
+        'n_estimators': range(100, 1100, 100),
+        'max_depth': range(3, 10, 2),
+        'learning_rate': np.arange(0.01, 0.1, 0.01),
+        'subsample': np.arange(0.5, 1.1, 0.1),
+        'colsample_bytree': np.arange(0.5, 1.1, 0.1),
+        'gamma': [0, 0.1, 0.2, 0.3],
+        'reg_alpha': [0, 0.01, 0.1, 1],
+        'reg_lambda': [1, 0.1, 0.01, 0]
+    },
+    'random_forest': {
+        'n_estimators': range(100, 1100, 100), 
+        'max_depth': range(1, 16, 2), 
+        'min_samples_split': range(2, 12, 2), 
+        'min_samples_leaf': range(2, 8, 2),
+        'max_features': ['auto', 'sqrt', 'log2'],
+        'bootstrap': [True, False]
+    },
+    'gbr': {
+        'n_estimators': range(100, 1100, 100),
+        'max_depth': range(1, 11, 2),
+        'subsample': np.arange(0.5, 1.1, 0.1),
+        'min_samples_split': range(2, 8, 2),
+        'min_samples_leaf': range(2, 8, 2),
+        'learning_rate': np.arange(0.1, 1.1, 0.1),
+        'max_features': ['auto', 'sqrt', 'log2'],
+        "criterion": ["friedman_mse", "mse", "mae"],
+        'loss': ['ls', 'lad', 'huber', 'quantile']
+    },
+    'svr': {
+        'C': [0.01, 0.1, 1, 10, 100, 1000],
+        'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
+        'gamma': ['scale', 'auto'],
+        'epsilon': [0.001, 0.01, 0.1, 1]
+    },
+    'polynomial': {
+        'poly__degree': range(2, 8, 2),  
+        'linear__fit_intercept': [True, False],
+        "poly__interaction_only": [True, False]
+    },
+    'ridge': {
+        'alpha': [0.1, 1.0, 10.0, 100.0],
+        "solver": ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"],
+        'fit_intercept': [True, False]
+    },
+    'lasso': {
+        'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0],
+        'fit_intercept': [True, False]
+    },
+    'knn': {
+        'n_neighbors': range(2, 17, 2),
+        'weights': ['uniform', 'distance'],
+        'p': [1, 2]  # 1: Manhattan, 2: Euclidean
+    },
+}
 
+
+def main():
     # Create an instance of the DataCollector class
     data_col = DataCollector()
 
@@ -477,44 +662,33 @@ if __name__ == "__main__":
     X_test = test.drop(columns="Close")
     y_test = test["Close"]               
 
-    # Define a dictionary of models to be tuned
-    models = {
-        'decision_tree': DecisionTreeRegressor(random_state=42),  
-        'ridge': Ridge(random_state=42),                          
-        'lasso': Lasso(random_state=42),                          
-    }
-
-    # Define a dictionary of hyperparameter grids for each model
-    params = {
-        'ridge': {
-            'alpha': [0.1, 1.0, 10.0, 100.0]  
-        },
-        'lasso': {
-            'alpha': [0.0001, 0.001, 0.01, 0.1, 1.0, 10.0],  
-            'max_iter': [10000, 15000, 20000]                
-        },
-        'decision_tree': {
-            'max_depth': [None, 10, 20, 30, 50],               
-            'min_samples_split': [2, 5, 10],                   
-            'min_samples_leaf': [1, 2, 4],                     
-            'max_features': ['auto', 'sqrt', 'log2']           
-        }
-    }
-
     # Create an instance of TimeSeriesModelEvaluator to handle model evaluation and tuning
     tsem = TimeSeriesModelEvaluator()
 
+    tsem.select_top_n_models(
+        X=X_train, 
+        y=y_train,
+        X_test=X_test, 
+        y_test=y_test, 
+        models=models, 
+    )
+
+
     # Tune models, log results to MLflow, and deploy the best model if needed
-    results = tsem.tune_and_log_models(X=X_train, 
-                                       y=y_train,
-                                       X_test=X_test, 
-                                       y_test=y_test, 
-                                    #    models=models, 
-                                    #    param_grids=params, 
-                                       deploy=True, 
-                                       mlflow_log_metrics=True)
+    # results = tsem.tune_and_log_models(
+#     X=X_train, 
+#     y=y_train,
+#     X_test=X_test, 
+#     y_test=y_test, 
+# #    models=models, 
+# #    param_grids=params, 
+#     deploy=True, 
+#     mlflow_log_metrics=True)
 
 
-    print(results)
+    # print(results)
+
+if __name__ == "__main__":
+    main()
 
 

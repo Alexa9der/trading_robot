@@ -52,13 +52,17 @@ class ModelDeploymentManager:
             model_uri = f"runs:/{run_id}/model"
 
             # Log the model as an artifact
-            self.__log_model(best_model, model_name, input_example=example_input)
+            self.__log_model(best_model, 
+                             model_name, 
+                             input_example=example_input, 
+                             run_id=run_id
+                             )
 
             log_message(f"Model logged to {model_uri}")
 
             # Log scaler parameters as an artifact
             # Log scaler parameters
-            scaler_param = self.scaler_param(scaler=scaler)
+            scaler_param = self.__scaler_params(scaler=scaler)
             if scaler_param:
                 mlflow.log_dict(scaler_param, "scaler_param.json")
             log_message(f"Scaler parameters logged as 'scaler_param.json'")
@@ -193,7 +197,7 @@ class ModelDeploymentManager:
 
         return scaler_param
 
-    def __log_model(self, model, model_name, input_example=None):
+    def __log_model(self, model, model_name, run_id, input_example=None, ):
         """
         Логирует модель в MLflow в зависимости от типа модели.
 
@@ -201,19 +205,19 @@ class ModelDeploymentManager:
         :param model_name: Название модели в MLflow.
         :param input_example: Пример входных данных для логирования модели (необязательно).
         """
-        with mlflow.start_run() as run:
-            if isinstance(model, CatBoostRegressor):
-                mlflow.catboost.log_model(model, model_name, input_example=input_example)
-                print(f"CatBoost model saved in run {run.info.run_id}")
+        # with mlflow.start_run() as run:
+        if isinstance(model, CatBoostRegressor):
+            mlflow.catboost.log_model(model, model_name, input_example=input_example)
+            print(f"CatBoost model saved in run {run_id}")
 
-            elif isinstance(model, XGBRegressor):
-                mlflow.xgboost.log_model(model, model_name, input_example=input_example)
-                print(f"XGBoost model saved in run {run.info.run_id}")
+        elif isinstance(model, XGBRegressor):
+            mlflow.xgboost.log_model(model, model_name, input_example=input_example)
+            print(f"XGBoost model saved in run {run_id}")
 
-            elif hasattr(model, 'predict'):
-                # Предполагаем, что это модель scikit-learn
-                mlflow.sklearn.log_model(model, model_name, input_example=input_example)
-                print(f"Scikit-learn model saved in run {run.info.run_id}")
+        elif hasattr(model, 'predict'):
+            # Предполагаем, что это модель scikit-learn
+            mlflow.sklearn.log_model(model, model_name, input_example=input_example)
+            print(f"Scikit-learn model saved in run {run_id}")
 
 
 if __name__ == "__main__":
